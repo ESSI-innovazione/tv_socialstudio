@@ -19,7 +19,7 @@ export interface StoredObject {
 }
 
 export interface ObjectStore {
-  kind: "supabase" | "memory";
+  kind: "supabase" | "blob" | "memory";
   put(path: string, data: Uint8Array, contentType: string): Promise<StoredObject>;
   get(path: string): Promise<{ data: Uint8Array; contentType: string } | null>;
   urlFor(path: string): string;
@@ -101,8 +101,75 @@ const memoryStore: ObjectStore = {
   },
 };
 
+/**
+ * Vercel Blob: l'archivio vero quando non c'e' Supabase.
+ *
+ * Lo store in memoria non regge in produzione e il modo in cui fallisce e'
+ * infido: la generazione riesce, il file viene scritto nell'istanza che l'ha
+ * prodotto, e la richiesta successiva atterra su un'altra istanza che non ha
+ * niente. Risultato: 404 su un'immagine che risulta creata. Blob e' incluso
+ * nel piano Pro e risolve il problema alla radice.
+ *
+ * Lo store e' privato: i file si servono attraverso una nostra rotta, dietro
+ * l'autenticazione dell'app, non con un indirizzo pubblico.
+ */
+const blobStore: ObjectStore = {
+  kind: "blob",
+
+  async put(path, data, contentType) {
+    const { put } = await import("@vercel/blob");
+
+    const result = await put(path, Buffer.from(data), {
+      access: "private",
+      contentType,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      token: env.blobToken!,
+    });
+
+    return { path: result.pathname, url: this.urlFor(result.pathname), bytes: data.byteLength };
+  },
+
+  async get(path) {
+    const { head, getDownloadUrl } = await import("@vercel/blob");
+
+    try {
+      const info = await head(path, { token: env.blobToken! });
+      const href = getDownloadUrl(info.url);
+
+      const response = await fetch(href, {
+        headers: { Authorization: `Bearer ${env.blobToken}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
+
+      return {
+        data: new Uint8Array(await response.arrayBuffer()),
+        contentType: info.contentType || "application/octet-stream",
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  urlFor(path) {
+    return `/api/documents/file/${encodeURIComponent(path)}`;
+  },
+};
+
+/**
+ * L'archivio in ordine di preferenza: Supabase se configurato, altrimenti
+ * Vercel Blob, e la memoria solo quando non c'e' nessuno dei due.
+ */
 export function objectStore(): ObjectStore {
-  return supabaseConfigured ? supabaseStore : memoryStore;
+  if (supabaseConfigured) return supabaseStore;
+  if (env.blobToken) return blobStore;
+  return memoryStore;
+}
+
+/** Vero quando i file sopravvivono davvero alla richiesta che li ha creati. */
+export function storageIsDurable(): boolean {
+  return supabaseConfigured || Boolean(env.blobToken);
 }
 
 /** Il percorso di un documento archiviato. */

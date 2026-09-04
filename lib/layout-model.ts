@@ -255,6 +255,12 @@ export function defaultLayout(format: FormatId, archetype: ArchetypeId): AssetLa
         block("body", left, 0.6, textWidth * 0.9, {}),
         block("badge", left, 0.74, textWidth * 0.7, {}),
         block("cta", left, 0.84, textWidth, { step: 4 }),
+        // Sul verticale la foto sta sotto la CTA e prende quel che avanza.
+        // Senza, un impianto con poco testo lascia mezza pagina vuota: e' il
+        // difetto che si nota prima di qualunque altro.
+        ...(wide
+          ? []
+          : [block("image", left, 0.86, width, { h: 0.12, focal: { x: 0.5, y: 0.5 }, step: 0 })]),
         block("disclaimer", left, 0.93, width, {}),
       ],
     };

@@ -39,6 +39,9 @@ export const env = {
   get gammaApiKey() {
     return read("GAMMA_API_KEY");
   },
+  get blobToken() {
+    return read("BLOB_READ_WRITE_TOKEN");
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },

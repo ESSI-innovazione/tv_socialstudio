@@ -219,7 +219,7 @@ export function DynamicHero({
         {media ? (
           <div className="mt-14 w-full max-w-[900px]">
             <div className="rounded-[32px] bg-line p-1">
-              <div className="relative h-[300px] overflow-hidden rounded-[28px] bg-wine-tint sm:h-[440px]">
+              <div className="relative flex h-[280px] items-center justify-center gap-6 overflow-hidden rounded-[28px] bg-wine-tint sm:h-[400px]">
                 {media}
               </div>
             </div>
