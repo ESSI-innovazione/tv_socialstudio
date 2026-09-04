@@ -1,10 +1,18 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { Check, CircleAlert, FileDown, RotateCcw, TriangleAlert } from "lucide-react";
-import { FORMATS, UNVERIFIED } from "@/lib/brand";
+import { FORMATS, type FormatId } from "@/lib/brand";
+import { UNVERIFIED } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
+import {
+  archetypeFromLabel,
+  defaultLayout,
+  type AssetLayout,
+} from "@/lib/layout-model";
 import type { GuardCheck, Run, VariantCopy } from "@/lib/types";
 import { AssetPreview } from "./asset-preview";
+import { AssetEditor } from "./asset-editor";
 
 interface Props {
   run: Run;
@@ -17,6 +25,24 @@ interface Props {
 export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
   const variant = run.variants.find((v) => v.index === selected) ?? run.variants[0];
   const blocking = run.guard.some((c) => c.status === "fail");
+
+  // Il formato che si sta impaginando. Gli altri si allineano da soli.
+  const [editFormat, setEditFormat] = useState<FormatId>(run.formats[0] ?? "linkedin");
+
+  /**
+   * Un layout per coppia variante-formato. Finche' non e' stato toccato, la
+   * chiave non esiste e vale quello del template.
+   */
+  const [layouts, setLayouts] = useState<Record<string, AssetLayout>>({});
+
+  const archetype = archetypeFromLabel(variant?.layout);
+  const layoutKey = `${variant?.index ?? 0}:${editFormat}`;
+  const layout = layouts[layoutKey] ?? defaultLayout(editFormat, archetype);
+
+  const onLayoutChange = useCallback(
+    (next: AssetLayout) => setLayouts((current) => ({ ...current, [layoutKey]: next })),
+    [layoutKey],
+  );
 
   return (
     <div className="flex flex-col gap-6 px-8 py-7">
@@ -173,6 +199,50 @@ export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
               onChange={(badge) => onEdit(variant.index, { badge: badge || null })}
             />
           </div>
+        </section>
+      ) : null}
+
+      {/* ---------------- impaginazione ---------------- */}
+      {variant ? (
+        <section className="tv-card p-5">
+          <div className="flex flex-wrap items-center gap-2 pb-3">
+            {run.formats.map((format) => {
+              const on = format === editFormat;
+              return (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => setEditFormat(format)}
+                  aria-pressed={on}
+                  className="tv-pill h-[32px] px-3.5 text-[12.5px] transition-colors"
+                  style={{
+                    background: on ? "var(--color-wine)" : "var(--color-line-soft)",
+                    color: on ? "#ffffff" : "var(--color-ink-soft)",
+                  }}
+                >
+                  {FORMATS[format].label}
+                </button>
+              );
+            })}
+            <div className="flex-1" />
+            {layouts[layoutKey] ? (
+              <span
+                className="tv-pill h-[26px] px-2.5 text-[11px]"
+                style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
+              >
+                impaginazione modificata
+              </span>
+            ) : null}
+          </div>
+
+          <AssetEditor
+            copy={variant}
+            layout={layout}
+            archetype={archetype}
+            photo={run.brief?.photo ?? "tv-digitale.jpg"}
+            onChange={onLayoutChange}
+            width={editFormat === "linkedin" ? 420 : editFormat === "ig-story" ? 220 : 300}
+          />
         </section>
       ) : null}
 

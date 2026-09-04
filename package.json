@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:layout": "tsc lib/layout-model.ts lib/brand.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck && node scripts/layout-model.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
