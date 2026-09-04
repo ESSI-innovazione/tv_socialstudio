@@ -335,17 +335,58 @@ async function archive(
 }
 
 /**
- * Conta le pagine di un PDF senza aprire una libreria: si contano gli oggetti
- * `/Type /Page`. Basta per dire al team quante pagine ha il catalogo.
+ * Conta le pagine di un PDF.
+ *
+ * Un PDF moderno non tiene gli oggetti in chiaro: dalla versione 1.5 le
+ * definizioni delle pagine stanno dentro object stream compressi con zlib.
+ * Cercare `/Type /Page` nel testo grezzo trova zero su qualunque file reale —
+ * ed e' esattamente cosa succedeva prima. Si guarda in chiaro, poi dentro gli
+ * stream compressi.
  */
 export function countPdfPages(bytes: Uint8Array): number | null {
-  const text = Buffer.from(bytes).toString("latin1");
+  const buffer = Buffer.from(bytes);
+  if (!buffer.subarray(0, 5).toString("latin1").startsWith("%PDF-")) return null;
 
-  const counted = (text.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  if (counted > 0) return counted;
+  const plain = buffer.toString("latin1");
 
-  const declared = text.match(/\/Count\s+(\d+)/);
-  return declared ? Number.parseInt(declared[1], 10) : null;
+  const direct = (plain.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  if (direct > 0) return direct;
+
+  const declared = plain.match(/\/Count\s+(\d+)/);
+  if (declared) return Number.parseInt(declared[1], 10);
+
+  return countInObjectStreams(buffer);
+}
+
+function countInObjectStreams(buffer: Buffer): number | null {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { inflateSync } = require("node:zlib") as typeof import("node:zlib");
+  const plain = buffer.toString("latin1");
+
+  let total = 0;
+  let counts: number[] = [];
+
+  const streams = plain.matchAll(/\/Type\s*\/ObjStm[\s\S]*?stream[\r]?[\n]/g);
+
+  for (const match of streams) {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = plain.indexOf("endstream", start);
+    if (end < 0) continue;
+
+    try {
+      const inflated = inflateSync(buffer.subarray(start, end)).toString("latin1");
+      total += (inflated.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+      counts = counts.concat(
+        [...inflated.matchAll(/\/Count\s+(\d+)/g)].map((m) => Number.parseInt(m[1], 10)),
+      );
+    } catch {
+      // Uno stream illeggibile non e' un errore: si prova il prossimo.
+    }
+  }
+
+  if (total > 0) return total;
+  // Il /Count piu' alto e' quello della radice dell'albero delle pagine.
+  return counts.length > 0 ? Math.max(...counts) : null;
 }
 
 /* ------------------------------------------------------------------ */

@@ -57,6 +57,31 @@ async function throwsAsync(name, fn, type) {
 
 /* ---------------- un PDF finto ma contabile ---------------- */
 
+/**
+ * Un PDF con gli oggetti compressi, come li produce Gamma. E' il caso che
+ * faceva restituire null al contatore: le pagine non sono in chiaro.
+ */
+function fakeCompressedPdf(pages) {
+  const zlib = require("node:zlib");
+  const NL = "\n";
+  let objects = "";
+  for (let i = 0; i < pages; i++) {
+    objects += "<< /Type /Page /Parent 1 0 R >>" + NL;
+  }
+  objects += "<< /Type /Pages /Count " + pages + " >>" + NL;
+  const packed = zlib.deflateSync(Buffer.from(objects, "latin1"));
+
+  const head = "%PDF-1.7" + NL + "4 0 obj" + NL +
+    "<< /Type /ObjStm /N 11 /Filter /FlateDecode >>" + NL + "stream" + NL;
+  const tail = NL + "endstream" + NL + "endobj" + NL + "%%EOF";
+
+  return Buffer.concat([
+    Buffer.from(head, "latin1"),
+    packed,
+    Buffer.from(tail, "latin1"),
+  ]);
+}
+
 function fakePdf(pages) {
   let body = "%PDF-1.4\n";
   for (let i = 0; i < pages; i++) {
@@ -296,6 +321,13 @@ check("tema alternativo selezionabile", eventi.themeId === THEMES.eventi.id);
 
   check("conta 12 pagine", countPdfPages(fakePdf(12)) === 12, String(countPdfPages(fakePdf(12))));
   check("conta 1 pagina", countPdfPages(fakePdf(1)) === 1, String(countPdfPages(fakePdf(1))));
+  check("conta le pagine dentro gli object stream compressi",
+    countPdfPages(fakeCompressedPdf(10)) === 10,
+    String(countPdfPages(fakeCompressedPdf(10))));
+  check("conta un catalogo compresso da 12 pagine",
+    countPdfPages(fakeCompressedPdf(12)) === 12,
+    String(countPdfPages(fakeCompressedPdf(12))));
+
   check("non inventa pagine su un file non-PDF",
     countPdfPages(Buffer.from("non sono un pdf")) === null,
     String(countPdfPages(Buffer.from("non sono un pdf"))));
