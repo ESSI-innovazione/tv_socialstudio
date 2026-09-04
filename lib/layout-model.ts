@@ -58,6 +58,12 @@ export interface Block {
 export interface AssetLayout {
   format: FormatId;
   blocks: Block[];
+  /**
+   * Da dove parte la colonna di testo, in frazione di artboard. Serve agli
+   * impianti che vogliono il testo in basso sopra la foto: senza questo, il
+   * flusso lo risucchierebbe in alto e l'impianto sparirebbe.
+   */
+  flowStart?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -227,6 +233,7 @@ export function defaultLayout(format: FormatId, archetype: ArchetypeId): AssetLa
   if (archetype === "foto-a-tutta-pagina") {
     return {
       format,
+      flowStart: 0.52,
       blocks: [
         block("image", 0, 0, 1, { h: 1, focal: { x: 0.5, y: 0.42 }, step: 0 }),
         logo,
@@ -241,6 +248,7 @@ export function defaultLayout(format: FormatId, archetype: ArchetypeId): AssetLa
     return {
       format,
       blocks: [
+        ...(wide ? [block("image", 0.5, 0, 0.5, { h: 1, focal: { x: 0.5, y: 0.5 }, step: 0 })] : []),
         logo,
         block("headline", left, 0.3, textWidth, { step: 11 }),
         block("subhead", left, 0.5, textWidth, { step: 7 }),
@@ -261,6 +269,7 @@ export function defaultLayout(format: FormatId, archetype: ArchetypeId): AssetLa
         block("body", left, 0.48, textWidth * 0.85, { step: 5 }),
         block("badge", left, 0.66, textWidth * 0.7, {}),
         block("cta", left, 0.78, textWidth, { step: 4 }),
+        block("image", left, 0.84, width, { h: 0.14, focal: { x: 0.5, y: 0.5 }, step: 0 }),
         block("disclaimer", left, 0.92, width, {}),
       ],
     };
@@ -327,4 +336,198 @@ export function archetypeFromLabel(label: string | null | undefined): ArchetypeI
     return "dato-dominante";
   }
   return "testo-in-alto";
+}
+
+/* ------------------------------------------------------------------ */
+/* Flusso verticale                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Quanto e' alto un blocco di testo una volta mandato a capo.
+ *
+ * E' una stima, non una misura: Satori impagina davvero solo al render. Serve
+ * a far partire il template senza sovrapposizioni, perche' un'altezza indovinata
+ * a mano collassa appena il titolo diventa piu' lungo di quello di prova.
+ */
+const LINE_HEIGHT: Record<BlockKind, number> = {
+  logo: 1.15,
+  eyebrow: 1.2,
+  headline: 1.04,
+  subhead: 1.15,
+  body: 1.5,
+  badge: 1.2,
+  cta: 1.7,
+  image: 1,
+  disclaimer: 1.4,
+};
+
+/** Larghezza media del glifo in frazione del corpo, per peso. */
+const GLYPH_RATIO: Record<BlockKind, number> = {
+  logo: 0.78,
+  eyebrow: 0.72,
+  headline: 0.55,
+  subhead: 0.56,
+  body: 0.52,
+  badge: 0.62,
+  cta: 0.55,
+  image: 0,
+  disclaimer: 0.5,
+};
+
+export interface BlockText {
+  eyebrow: string;
+  headline: string;
+  subhead: string;
+  body: string;
+  badge: string | null;
+  disclaimer: string | null;
+}
+
+function textOf(kind: BlockKind, text: BlockText): string {
+  switch (kind) {
+    case "eyebrow":
+      return text.eyebrow;
+    case "headline":
+      return text.headline;
+    case "subhead":
+      return text.subhead;
+    case "body":
+      return text.body;
+    case "badge":
+      return text.badge ?? "";
+    case "disclaimer":
+      return text.disclaimer ?? "";
+    case "cta":
+      return "cta";
+    case "logo":
+      return "TIME VISION";
+    default:
+      return "";
+  }
+}
+
+/** Altezza stimata del blocco, in frazione di artboard. */
+export function estimateHeight(format: FormatId, block: Block, text: BlockText): number {
+  const spec = FORMATS[format];
+
+  if (block.kind === "image") return block.h ?? 0.25;
+
+  const size = fontSizeOf(format, block);
+  const content = textOf(block.kind, text);
+  if (content.length === 0) return 0;
+
+  if (block.kind === "logo") return (size * 1.6 * 1.15) / spec.height;
+
+  // La CTA e' su due righe: etichetta e indirizzo.
+  if (block.kind === "cta") return (size * LINE_HEIGHT.cta + size * 0.68) / spec.height;
+
+  const widthPx = block.w * spec.width;
+  const perLine = Math.max(1, Math.floor(widthPx / (size * GLYPH_RATIO[block.kind])));
+  const lines = Math.max(1, Math.ceil(content.length / perLine));
+
+  if (block.kind === "badge") return (size * LINE_HEIGHT.badge + size * 1.44) / spec.height;
+
+  return (lines * size * LINE_HEIGHT[block.kind]) / spec.height;
+}
+
+/** Un'immagine che copre tutta l'altezza fa da fondo: non occupa il flusso. */
+function isBackdrop(block: Block): boolean {
+  return block.kind === "image" && (block.h ?? 0) >= 0.9;
+}
+
+/**
+ * Ricalcola le posizioni verticali incolonnando i blocchi nell'ordine
+ * dichiarato. Il marchio resta in alto, il disclaimer in fondo, il fondo
+ * fotografico sta sotto a tutto. Cosi' il template di partenza non si
+ * sovrappone mai, qualunque lunghezza abbia il testo.
+ */
+export function flowLayout(layout: AssetLayout, text: BlockText): AssetLayout {
+  const inset = safeInset(layout.format);
+  const spec = FORMATS[layout.format];
+
+  const gapFor = (block: Block) =>
+    block.kind === "image" ? 0.03 : Math.max(fontSizeOf(layout.format, block) * 0.45, 10) / spec.height;
+
+  const disclaimer = layout.blocks.find((b) => b.kind === "disclaimer");
+  const bottomReserved = disclaimer
+    ? estimateHeight(layout.format, disclaimer, text) + 0.02
+    : 0;
+
+  // Il marchio non partecipa al flusso: sta in alto a sinistra, sempre.
+  const logo = layout.blocks.find((b) => b.kind === "logo");
+  const logoBottom = logo
+    ? inset.y + estimateHeight(layout.format, logo, text) + gapFor(logo)
+    : inset.y;
+
+  const start = layout.flowStart ?? logoBottom;
+  const limit = 1 - inset.y - bottomReserved;
+
+  /**
+   * Un'immagine dentro la colonna e' elastica: prende quello che avanza fra
+   * l'ultimo testo e il disclaimer. Senza questo, un impianto con poco testo
+   * lascia mezza pagina vuota, che e' il difetto che si nota per primo.
+   */
+  const stretchy = layout.blocks.find((b) => b.kind === "image" && !isBackdrop(b));
+
+  let occupied = 0;
+  for (const b of layout.blocks) {
+    if (b.kind === "logo" || b.kind === "disclaimer" || isBackdrop(b)) continue;
+    if (stretchy && b.id === stretchy.id) {
+      occupied += gapFor(b);
+      continue;
+    }
+    const height = estimateHeight(layout.format, b, text);
+    if (height > 0) occupied += height + gapFor(b);
+  }
+
+  const stretchHeight = stretchy
+    ? Math.max(0.1, limit - start - occupied)
+    : 0;
+
+  let cursor = start;
+
+  const blocks = layout.blocks.map((block) => {
+    if (block.kind === "logo") return { ...block, y: inset.y };
+    if (isBackdrop(block)) return { ...block, y: 0 };
+    if (block.kind === "disclaimer") {
+      return { ...block, y: 1 - inset.y - estimateHeight(layout.format, block, text) };
+    }
+
+    if (stretchy && block.id === stretchy.id) {
+      const placed = { ...block, y: cursor, h: stretchHeight };
+      cursor += stretchHeight + gapFor(block);
+      return placed;
+    }
+
+    const height = estimateHeight(layout.format, block, text);
+    if (height === 0) return { ...block, y: cursor };
+
+    const placed = { ...block, y: cursor };
+    cursor += height + gapFor(block);
+    return placed;
+  });
+
+  // Se la colonna sfora, si stringe lo spazio invece di far uscire il testo.
+  if (cursor > limit) {
+    const squeeze = (limit - start) / (cursor - start);
+    return {
+      ...layout,
+      blocks: blocks.map((b) =>
+        isBackdrop(b) || b.kind === "disclaimer" || b.kind === "logo"
+          ? b
+          : { ...b, y: start + (b.y - start) * squeeze },
+      ),
+    };
+  }
+
+  return { ...layout, blocks };
+}
+
+/** Il layout del template, gia' incolonnato per il testo che deve ospitare. */
+export function templateLayout(
+  format: FormatId,
+  archetype: ArchetypeId,
+  text: BlockText,
+): AssetLayout {
+  return flowLayout(defaultLayout(format, archetype), text);
 }

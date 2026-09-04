@@ -7,8 +7,9 @@ import { UNVERIFIED } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
 import {
   archetypeFromLabel,
-  defaultLayout,
+  templateLayout,
   type AssetLayout,
+  type BlockText,
 } from "@/lib/layout-model";
 import type { GuardCheck, Run, VariantCopy } from "@/lib/types";
 import { AssetPreview } from "./asset-preview";
@@ -37,7 +38,17 @@ export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
 
   const archetype = archetypeFromLabel(variant?.layout);
   const layoutKey = `${variant?.index ?? 0}:${editFormat}`;
-  const layout = layouts[layoutKey] ?? defaultLayout(editFormat, archetype);
+
+  const blockText: BlockText = {
+    eyebrow: variant?.eyebrow ?? "",
+    headline: variant?.headline ?? "",
+    subhead: variant?.subhead ?? "",
+    body: variant?.body ?? "",
+    badge: variant?.badge ?? null,
+    disclaimer: variant?.disclaimer ?? null,
+  };
+
+  const layout = layouts[layoutKey] ?? templateLayout(editFormat, archetype, blockText);
 
   const onLayoutChange = useCallback(
     (next: AssetLayout) => setLayouts((current) => ({ ...current, [layoutKey]: next })),

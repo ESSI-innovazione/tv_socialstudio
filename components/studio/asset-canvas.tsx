@@ -104,9 +104,21 @@ function BlockView({
     const height = (block.h ?? 0.25) * spec.height;
     const focal = block.focal ?? { x: 0.5, y: 0.5 };
     const fullBleed = block.w >= 0.99 && (block.h ?? 0) >= 0.99;
+    const sideBand = block.w < 0.99 && (block.h ?? 0) >= 0.9;
+
+    // Testo su foto senza velo non regge il contrasto: il velo fa parte
+    // dell'impianto, non e' un ritocco. Coordinate esplicite invece di inset,
+    // che Satori interpreta in modo meno prevedibile.
+    const veil = fullBleed
+      ? "linear-gradient(180deg, rgba(114,0,38,.38) 0%, rgba(114,0,38,.86) 56%, rgba(114,0,38,.97) 100%)"
+      : sideBand
+        ? "linear-gradient(90deg, #720026 0%, rgba(114,0,38,.92) 26%, rgba(114,0,38,0) 100%)"
+        : null;
 
     return (
-      <div style={{ ...frame, height, overflow: "hidden" }}>
+      <div
+        style={{ position: "absolute", left, top, width, height, display: "flex", overflow: "hidden" }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`${baseUrl}/brand/${photo}`}
@@ -114,21 +126,22 @@ function BlockView({
           width={Math.round(width)}
           height={Math.round(height)}
           style={{
-            width: "100%",
-            height: "100%",
+            width,
+            height,
             objectFit: "cover",
-            objectPosition: `${focal.x * 100}% ${focal.y * 100}%`,
+            objectPosition: `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%`,
           }}
         />
-        {/* Testo su foto senza velo non passa il controllo contrasto. */}
-        {fullBleed ? (
+        {veil ? (
           <div
             style={{
               position: "absolute",
-              inset: 0,
+              left: 0,
+              top: 0,
+              width,
+              height,
               display: "flex",
-              backgroundImage:
-                "linear-gradient(180deg, rgba(114,0,38,.48) 0%, rgba(114,0,38,.92) 62%, rgba(114,0,38,.99) 100%)",
+              backgroundImage: veil,
             }}
           />
         ) : null}
@@ -139,7 +152,7 @@ function BlockView({
   if (block.kind === "logo") {
     const mark = size * 1.6;
     return (
-      <div style={{ ...frame, alignItems: "center", gap: mark * 0.4 }}>
+      <div style={{ ...frame, width: "auto", alignItems: "center", gap: mark * 0.4 }}>
         <svg
           width={mark}
           height={mark * (108 / 105)}
@@ -154,6 +167,7 @@ function BlockView({
             fontSize: size,
             fontWeight: 700,
             letterSpacing: "0.15em",
+            whiteSpace: "nowrap",
             color: onDark ? "#ffffff" : BRAND.wine,
           }}
         >
