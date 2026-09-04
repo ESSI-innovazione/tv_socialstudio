@@ -6,6 +6,7 @@ import { mockScript, startMockRun } from "@/lib/mock-run";
 import { applyEvent } from "@/lib/run-events";
 import { SAMPLE_ATTACHMENTS, SAMPLE_INSTRUCTION } from "@/lib/seed-data";
 import type { Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
+import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
 import { LeftRail } from "./left-rail";
@@ -48,6 +49,13 @@ export function StudioShell({
   const [selected, setSelected] = useState(0);
 
   const [instruction, setInstruction] = useState(SAMPLE_INSTRUCTION);
+
+  /**
+   * Il visual scelto per la campagna. Vive qui e non nel selettore, perche'
+   * deve sopravvivere al passaggio a «in esecuzione»: e' quello che finisce
+   * sugli asset.
+   */
+  const [image, setImage] = useState<ImageChoice | null>(null);
   const [attachments] = useState(SAMPLE_ATTACHMENTS);
   const [formats, setFormats] = useState<FormatId[]>([
     "poster-a4",
@@ -105,7 +113,14 @@ export function StudioShell({
     for (const { at, event } of mockScript(fresh)) {
       timers.current.push(
         setTimeout(() => {
-          setRun((prev) => (prev ? applyEvent(prev, event) : prev));
+          setRun((prev) => {
+            if (!prev) return prev;
+            const next = applyEvent(prev, event);
+            // Il visual scelto a mano vince su quello proposto dal brief.
+            return image && next.brief
+              ? { ...next, brief: { ...next.brief, photo: image.url } }
+              : next;
+          });
           if (event.type === "state") {
             const ms = Date.now() - began;
             setRun((prev) =>
@@ -169,6 +184,8 @@ export function StudioShell({
             <Composer
               instruction={instruction}
               onInstruction={setInstruction}
+              imageId={image?.id ?? null}
+              onImage={setImage}
               attachments={[...attachments]}
               formats={formats}
               onToggleFormat={toggleFormat}

@@ -104,3 +104,40 @@ export interface GeneratedDocument {
 export interface DocumentGenerator {
   generate(req: DocumentRequest): Promise<GeneratedDocument>
 }
+
+/* ------------------------------------------------------------------ */
+/* Immagini                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Da dove viene un visual: l'archivio aziendale o un modello. */
+export type ImageOrigin = 'archive' | 'generated'
+
+export type ImagePurpose = 'poster-a4' | 'linkedin' | 'ig-feed' | 'ig-story' | 'catalogo'
+
+export interface ImageChoice {
+  id: string
+  origin: ImageOrigin
+  /** Il nostro indirizzo. Mai quello del fornitore, che scade. */
+  url: string
+  label: string
+  width: number
+  height: number
+  /** Presente solo sui visual generati: e' la provenienza da registrare. */
+  prompt?: string
+  model?: string
+  createdAt?: string
+}
+
+export interface ImageRequest {
+  prompt: string
+  purpose: ImagePurpose
+  /** Tipo di resa. Il 3D e' quello che il brand usa per i key visual. */
+  style: 'abstract' | 'illustration' | 'photo' | 'scene'
+}
+
+export interface ImageSource {
+  /** L'archivio fotografico aziendale. Gratuito, e la prima scelta. */
+  archive(): ImageChoice[]
+  /** Genera un visual nuovo. Consuma crediti. */
+  generate(req: ImageRequest): Promise<ImageChoice>
+}

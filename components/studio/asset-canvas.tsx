@@ -104,6 +104,9 @@ function BlockView({
     const height = (block.h ?? 0.25) * spec.height;
     const focal = block.focal ?? { x: 0.5, y: 0.5 };
     const fullBleed = block.w >= 0.99 && (block.h ?? 0) >= 0.99;
+    // Su un visual generato il velo si mette sempre: la palette del modello
+    // non e' garantita, quella del brand si'.
+    const generated = photo.includes("visual");
     const sideBand = block.w < 0.99 && (block.h ?? 0) >= 0.9;
 
     // Testo su foto senza velo non regge il contrasto: il velo fa parte
@@ -121,7 +124,7 @@ function BlockView({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={`${baseUrl}/brand/${photo}`}
+          src={photoSrc(photo, baseUrl)}
           alt=""
           width={Math.round(width)}
           height={Math.round(height)}
@@ -306,4 +309,14 @@ function justify(align: Block["align"]): string {
   if (align === "center") return "center";
   if (align === "right") return "flex-end";
   return "flex-start";
+}
+
+/**
+ * Il visual puo' essere un nome di file dell'archivio oppure un indirizzo
+ * nostro, se e' stato generato e riospitato. Distinguere serve qui e basta.
+ */
+function photoSrc(photo: string, baseUrl: string): string {
+  if (photo.startsWith("http")) return photo;
+  if (photo.startsWith("/")) return `${baseUrl}${photo}`;
+  return `${baseUrl}/brand/${photo}`;
 }

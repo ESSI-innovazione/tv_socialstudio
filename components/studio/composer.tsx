@@ -15,6 +15,8 @@ import { FORMATS, FORMAT_ORDER, type FormatId } from "@/lib/brand";
 import { durationLabel, timeAgo } from "@/lib/format";
 import type { Attachment, Run, Template, Tool } from "@/lib/types";
 import { TOOL_ICONS } from "./left-rail";
+import { ImagePicker } from "./image-picker";
+import type { ImageChoice, ImagePurpose } from "@/lib/integrations/types";
 
 interface Props {
   instruction: string;
@@ -32,6 +34,9 @@ interface Props {
   onTool: (slug: string) => void;
   recentRuns: Run[];
   onRun: () => void;
+  /** Il visual scelto per la campagna: archivio o generato. */
+  imageId: string | null;
+  onImage: (choice: ImageChoice | null) => void;
 }
 
 export function Composer({
@@ -50,6 +55,8 @@ export function Composer({
   onTool,
   recentRuns,
   onRun,
+  imageId,
+  onImage,
 }: Props) {
   const [focused, setFocused] = useState(false);
   const fieldId = useId();
@@ -147,6 +154,13 @@ export function Composer({
           })}
         </div>
       </section>
+
+      {/* ---------------- visual ---------------- */}
+      <ImagePicker
+        selectedId={imageId}
+        onSelect={onImage}
+        purpose={(formats[0] ?? "ig-feed") as ImagePurpose}
+      />
 
       {/* ---------------- template + esegui ---------------- */}
       <section
