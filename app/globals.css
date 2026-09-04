@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   Time Vision Marketing Studio — sistema visivo
+   I valori qui sotto sono la fonte di verita'. Non aggiungere grigi
+   piu' chiari di --ink-faint: e' il pavimento di contrasto WCAG AA.
+   --------------------------------------------------------------- */
+@theme {
+  --color-wine: #720026;
+  --color-rose: #ce4257;
+  --color-coral: #ff7f51;
+  --color-apricot: #ff9b54;
+
+  --color-ink: #2a1119;
+  --color-ink-soft: #5c4850;
+  --color-ink-faint: #7e6a73;
+
+  --color-line: #ecdfe2;
+  --color-line-soft: #f6eff1;
+  --color-canvas: #fbf7f5;
+  --color-paper: #ffffff;
+  --color-wine-tint: #fbeef0;
+  --color-wine-edge: #f4dee2;
+  --color-warm-tint: #fff2ea;
+  --color-warm-edge: #ffd9c4;
+
+  --color-success: #1f5436;
+  --color-success-bg: #e8f1ec;
+  --color-warning: #a8481a;
+  --color-warning-bg: #fff2ea;
+
+  --color-mute: #e0d2d6;
+  --color-on-wine: #e8c4cb;
+  --color-on-wine-faint: #d8a3ae;
+
+  --font-sans: var(--font-lexend), "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-card: 14px;
+  --radius-card-lg: 18px;
+
+  --shadow-card: 0 12px 30px -24px rgb(114 0 38 / 0.45);
+  --shadow-card-soft: 0 10px 24px -22px rgb(114 0 38 / 0.45);
+  --shadow-focus: 0 0 0 4px rgb(206 66 87 / 0.10), 0 16px 36px -28px rgb(114 0 38 / 0.5);
+  --shadow-coral: 0 12px 26px -12px rgb(255 127 81 / 0.95);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  a {
+    color: var(--color-rose);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--color-wine);
+  }
+
+  ::selection {
+    background: var(--color-wine-tint);
+    color: var(--color-wine);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-rose);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Ogni pill resta su una riga sola: e' una regola del sistema. */
+  .tv-pill {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .tv-card {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .tv-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--color-ink-faint);
+  }
+
+  .tv-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer utilities {
+  .tv-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  .tv-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .tv-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+  }
+}
+
+@keyframes tv-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes tv-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tv-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.tv-anim-pulse { animation: tv-pulse 1.4s ease-in-out infinite; }
+.tv-anim-spin { animation: tv-spin 0.9s linear infinite; }
+.tv-anim-rise { animation: tv-rise 0.28s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-anim-pulse, .tv-anim-spin, .tv-anim-rise { animation: none; }
+}
