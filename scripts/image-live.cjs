@@ -8,10 +8,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-for (const line of fs.readFileSync(path.join(__dirname, "..", ".env.local"), "utf8").split("\n")) {
-  const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (match) process.env[match[1]] = match[2].trim();
-}
+require("./load-env.cjs")();
 
 const base = path.join(__dirname, "..", ".tmp-test");
 const { imageSource, imagePrompt } = require(`${base}/integrations/images.js`);
@@ -20,9 +17,9 @@ const { listRecentImages } = require(`${base}/db-images.js`);
 
 const REQ = {
   prompt:
-    "Chiave visiva astratta per un bando sulla digitalizzazione: forme geometriche tridimensionali che si incastrano, superfici opache, senso di struttura che si compone",
-  purpose: "ig-feed",
-  style: "abstract",
+    "Una scrivania in un ufficio, con documenti di una domanda di finanziamento, un portatile aperto e una tazza di caffe'. Luce naturale di mattina, ordine, lavoro in corso",
+  purpose: "poster-a4",
+  style: "scene",
 };
 
 (async () => {

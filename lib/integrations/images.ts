@@ -108,26 +108,28 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /* ------------------------------------------------------------------ */
 
 /**
- * Aggiunge al testo di chi chiede i vincoli che non sono negoziabili.
+ * Aggiunge al testo di chi chiede i vincoli che restano.
  *
- * Due regole, e la seconda conta piu' della prima. Niente testo dentro
- * l'immagine: il testo lo mette il compositore, dove il brand controlla corpo
- * e posizione. E niente persone o luoghi riconoscibili: una foto sintetica di
- * un'aula spacciata per un'aula Time Vision e' un rischio reputazionale che
- * nessun controllo automatico intercetta.
+ * La prima versione vietava anche «qualunque luogo identificabile», e il
+ * risultato erano onde e gradienti: senza un soggetto ammesso, il modello
+ * ripiega sempre sullo sfondo decorativo. Il rischio vero non e' mostrare un
+ * ufficio o un'aula, che e' normale in un materiale di marketing: e' spacciare
+ * una persona sintetica per una persona vera. Quindi si vietano i volti
+ * riconoscibili, non gli ambienti.
  */
 export function imagePrompt(req: ImageRequest): string {
   return [
     req.prompt.trim(),
-    // I codici esadecimali non funzionano: il modello li ignora e sceglie la
-    // sua palette. I nomi dei colori li capisce. Non basta comunque, ed e' per
-    // questo che il compositore applica il velo del brand sopra ogni visual
-    // generato: la conformita' non si chiede, si impone.
-    "Palette obbligatoria: bordeaux profondo e vinaccia scura come colore dominante,",
-    "accenti corallo e albicocca caldi. Nessun blu, nessun verde, nessun turchese.",
-    "Nessun testo, nessuna scritta, nessun logo dentro l'immagine.",
-    "Nessun volto riconoscibile, nessuna persona reale, nessun luogo identificabile.",
-    "Composizione pulita, spazio libero per il testo che verrà sovrapposto.",
+    "Immagine di alta qualita' con un soggetto chiaro e profondita' di campo.",
+    // Il difetto piu' frequente non e' un contenuto sbagliato, e' un'immagine
+    // che non dice niente: onde, gradienti, sfondi da schermata.
+    "Evita sfondi decorativi generici: niente onde astratte, niente gradienti,",
+    "niente texture senza soggetto.",
+    "Dominante calda su bordeaux e vinaccia, accenti corallo e albicocca.",
+    "Nessun testo, nessuna scritta, nessun logo, nessun marchio.",
+    "Nessun volto riconoscibile e nessuna persona reale identificabile:",
+    "figure di spalle, di scorcio o parziali quando servono persone.",
+    "Lascia una zona libera e uniforme per il testo che verra' sovrapposto.",
   ].join(" ");
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, ImageIcon, Loader2, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, ImageIcon, Loader2, Maximize2, Sparkles, TriangleAlert, X } from "lucide-react";
 import type { ImageChoice, ImagePurpose } from "@/lib/integrations/types";
 
 /**
@@ -47,6 +47,8 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
   const [open, setOpen] = useState(false);
   /** L'ultimo visual arrivato: si segnala, perche' fra dieci miniature sparisce. */
   const [fresh, setFresh] = useState<string | null>(null);
+  /** Il visual aperto a grandezza piena. Scegliere alla cieca da 92px non si puo'. */
+  const [preview, setPreview] = useState<ImageChoice | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +149,7 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
               onClick={() => onSelect(on ? null : choice)}
               aria-pressed={on}
               title={choice.prompt ?? choice.label}
-              className="relative h-[68px] w-[92px] shrink-0 overflow-hidden rounded-[10px] transition-all"
+              className="group relative h-[68px] w-[92px] shrink-0 overflow-hidden rounded-[10px] transition-all"
               style={{
                 border: `2px solid ${
                   on
@@ -187,6 +189,28 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                   <Check size={11} strokeWidth={3} />
                 </span>
               ) : null}
+
+              {/* Ingrandire non e' scegliere: sono due gesti diversi. */}
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="Ingrandisci"
+                title="Ingrandisci"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setPreview(choice);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.stopPropagation();
+                    setPreview(choice);
+                  }
+                }}
+                className="absolute top-1 right-1 flex h-[18px] w-[18px] items-center justify-center rounded-[5px] opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ background: "rgba(42,17,25,.72)", color: "#ffffff" }}
+              >
+                <Maximize2 size={10} strokeWidth={2.4} />
+              </span>
             </button>
           );
         })}
@@ -334,6 +358,85 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
           </div>
         )}
       </div>
+      {preview ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Anteprima del visual"
+          onClick={() => setPreview(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-8"
+          style={{ background: "rgba(42,17,25,.72)" }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="flex max-h-full w-full max-w-[720px] flex-col gap-3 overflow-auto rounded-card-lg p-4"
+            style={{ background: "var(--color-paper)" }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="tv-label">
+                  {preview.origin === "generated" ? "VISUAL GENERATO" : "ARCHIVIO AZIENDALE"}
+                </p>
+                <p
+                  className="mt-1 text-[12.5px] leading-[1.5]"
+                  style={{ color: "var(--color-ink-soft)" }}
+                >
+                  {preview.prompt ?? preview.label}
+                </p>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--color-ink-faint)" }}>
+                  {preview.width} × {preview.height}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                aria-label="Chiudi"
+                className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full"
+                style={{ background: "var(--color-line-soft)", color: "var(--color-ink-soft)" }}
+              >
+                <X size={15} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview.url}
+              alt={preview.label}
+              className="w-full rounded-[10px] object-contain"
+              style={{ maxHeight: "60vh", background: "var(--color-canvas)" }}
+            />
+
+            <p className="text-[11.5px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
+              Sull&apos;asset finale il visual passa sotto il velo del brand: qui lo vedi grezzo,
+              come lo ha prodotto il modello.
+            </p>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setPreview(null)}
+                className="tv-pill h-[36px] px-4 text-[13px]"
+                style={{ border: "1px solid var(--color-line)", color: "var(--color-ink-soft)" }}
+              >
+                Chiudi
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSelect(preview);
+                  setPreview(null);
+                }}
+                className="tv-pill h-[36px] gap-2 px-4 text-[13px]"
+                style={{ background: "var(--color-rose)", color: "#ffffff" }}
+              >
+                <Check size={14} strokeWidth={2.4} />
+                Usa questo visual
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

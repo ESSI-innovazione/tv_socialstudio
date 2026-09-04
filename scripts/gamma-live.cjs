@@ -12,10 +12,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // Le chiavi stanno in .env.local, che git non vede.
-for (const line of fs.readFileSync(path.join(__dirname, "..", ".env.local"), "utf8").split("\n")) {
-  const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (match) process.env[match[1]] = match[2].trim();
-}
+require("./load-env.cjs")();
 
 const base = path.join(__dirname, "..", ".tmp-test");
 const { startDocument, advance, toGeneratedDocument } = require(`${base}/integrations/gamma.js`);
