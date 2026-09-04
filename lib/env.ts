@@ -36,6 +36,9 @@ export const env = {
   get igUserId() {
     return read("IG_USER_ID");
   },
+  get gammaApiKey() {
+    return read("GAMMA_API_KEY");
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },

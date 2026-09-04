@@ -73,3 +73,34 @@ export interface AssetRenderer {
  * dimensione sbagliata.
  */
 export type AssetFormatsAreAligned = AssetFormat
+
+/* ------------------------------------------------------------------ */
+/* Documenti multipagina                                                */
+/* ------------------------------------------------------------------ */
+
+export type DocFormat = 'catalogo' | 'deck' | 'one-pager' | 'landing'
+
+export interface DocumentRequest {
+  format: DocFormat
+  title: string
+  /** Full source content — the brief plus any extracted attachment text. Never summarise before sending. */
+  inputText: string
+  audience?: string
+  tone?: string
+  numCards?: number
+  /** Photo archive keys the document should prefer over generated imagery. */
+  imageKeys?: string[]
+}
+
+export interface GeneratedDocument {
+  gammaId: string
+  gammaUrl: string          // for humans to open and hand-edit
+  storedFileUrl: string     // OUR copy, in our storage — this is the link the app shows
+  mime: 'application/pdf' | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  pages: number
+  generatedAt: string
+}
+
+export interface DocumentGenerator {
+  generate(req: DocumentRequest): Promise<GeneratedDocument>
+}
