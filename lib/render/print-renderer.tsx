@@ -81,6 +81,9 @@ async function launch() {
   return puppeteer.default.launch({
     args: local ? [] : chromium.args,
     executablePath: local ?? (await chromium.executablePath()),
+    // Il viewport lo imposta chi renderizza, ma su Vercel il default di
+    // @sparticuz/chromium evita che parta con una finestra impossibile.
+    defaultViewport: local ? null : chromium.defaultViewport,
     headless: true,
   });
 }
