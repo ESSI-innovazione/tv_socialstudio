@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
-import { getCampaigns, getTools } from "@/lib/db";
+import { StudioShell } from "@/components/studio/studio-shell";
+import { getCampaigns, getLatestRun, getTemplates, getTools, listRuns } from "@/lib/db";
+import { env } from "@/lib/env";
+import { timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -8,18 +11,26 @@ export default async function StudioPage() {
   const user = await currentUser();
   if (!user) redirect("/");
 
-  const [tools, campaigns] = await Promise.all([getTools(), getCampaigns()]);
+  const [tools, campaigns, templates, recentRuns, latestRun] = await Promise.all([
+    getTools(),
+    getCampaigns(),
+    getTemplates(),
+    listRuns(2),
+    getLatestRun(),
+  ]);
+
+  const synced = templates.find((t) => t.synced_at)?.synced_at ?? null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 p-10">
-      <h1 className="text-2xl font-bold tracking-tight text-ink">Console creativa</h1>
-      <p className="text-ink-soft">
-        Accesso confermato per {user.name} · ruolo {user.role}. La console arriva al passo
-        successivo.
-      </p>
-      <div className="tv-card p-5 text-sm text-ink-soft">
-        {tools.length} strumenti e {campaigns.length} campagne caricati.
-      </div>
-    </main>
+    <StudioShell
+      user={user}
+      tools={tools}
+      campaigns={campaigns}
+      templates={templates}
+      recentRuns={recentRuns}
+      initialRun={latestRun}
+      channelsLive={Boolean(env.linkedinToken && env.igToken)}
+      figmaSyncedAt={synced ? timeAgo(synced) : "mai sincronizzato"}
+    />
   );
 }
