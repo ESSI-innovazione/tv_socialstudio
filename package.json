@@ -7,11 +7,14 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "test:layout": "tsc lib/layout-model.ts lib/brand.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck && node scripts/layout-model.test.cjs"
+    "test:layout": "tsc lib/layout-model.ts lib/brand.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck && node scripts/layout-model.test.cjs",
+    "test:figma": "tsc lib/integrations/figma.ts lib/integrations/figma-errors.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck --esModuleInterop && node scripts/figma.test.cjs",
+    "test": "npm run test:layout && npm run test:figma"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
     "@base-ui/react": "^1.8.0",
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.115.0",
     "@vercel/og": "^1.0.2",
     "class-variance-authority": "^0.7.1",
@@ -20,6 +23,7 @@
     "lucide-react": "^1.41.0",
     "next": "15.5.25",
     "next-auth": "^5.0.0-beta.32",
+    "puppeteer-core": "^25.10.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "shadcn": "^4.21.0",
