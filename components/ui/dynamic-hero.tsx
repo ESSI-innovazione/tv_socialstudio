@@ -194,30 +194,30 @@ export function DynamicHero({
       ) : null}
 
       <main className="relative z-10 flex flex-col items-center px-6 pb-20">
-        <div className="mt-14 flex flex-col items-center md:mt-14">
-          {eyebrow ? <div className="mb-6">{eyebrow}</div> : null}
+        <div className="mt-14 flex flex-col items-center md:mt-[72px]">
+          {eyebrow ? <div className="mb-5">{eyebrow}</div> : null}
 
-          <h1 className="m-0 max-w-3xl text-center text-[34px] font-medium leading-[1.08] tracking-[-0.025em] text-ink sm:text-[44px] lg:text-[54px]">
+          <h1 className="m-0 max-w-[860px] text-balance text-center text-[clamp(2.25rem,1.1rem_+_3.6vw,4rem)] font-medium leading-[1.04] tracking-[-0.03em] text-ink">
             {headline}
           </h1>
 
-          <p className="mt-4 max-w-[600px] text-pretty text-center text-[16px] leading-relaxed text-ink-soft sm:text-[18px]">
+          <p className="mt-5 max-w-[560px] text-pretty text-center text-[clamp(1.0625rem,1rem_+_0.25vw,1.1875rem)] leading-[1.55] text-ink-soft">
             {tagline}
           </p>
         </div>
 
-        <div className="mt-9 flex justify-center">
+        <div className="mt-8 flex justify-center">
           <a
             ref={ctaRef}
             href={ctaHref}
-            className="rounded-xl border border-ink/50 px-[18px] py-2.5 text-[15px] font-medium text-ink transition-colors hover:border-wine hover:bg-wine hover:text-white"
+            className="rounded-xl border border-ink/50 px-6 py-3 text-[16px] font-medium text-ink transition-colors hover:border-wine hover:bg-wine hover:text-white"
           >
             {ctaLabel}
           </a>
         </div>
 
         {media ? (
-          <div className="mt-14 w-full max-w-[900px]">
+          <div className="mt-16 w-full max-w-[900px]">
             <div className="rounded-[32px] bg-line p-1">
               <div className="relative flex h-[280px] items-center justify-center gap-6 overflow-hidden rounded-[28px] bg-wine-tint sm:h-[400px]">
                 {media}

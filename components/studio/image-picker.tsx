@@ -45,6 +45,8 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  /** L'ultimo visual arrivato: si segnala, perche' fra dieci miniature sparisce. */
+  const [fresh, setFresh] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +95,7 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
             }
           : current,
       );
+      setFresh(data.image.id);
       setPrompt("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Generazione non riuscita.");
@@ -119,6 +122,22 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
 
       {/* --------- la griglia delle scelte --------- */}
       <div className="flex flex-wrap gap-2.5">
+        {/* Mentre si genera, il posto si vede: e' li' che comparira'. */}
+        {busy ? (
+          <div
+            className="flex h-[68px] w-[92px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-[10px]"
+            style={{
+              border: "2px dashed var(--color-rose)",
+              background: "var(--color-wine-tint)",
+            }}
+          >
+            <Loader2 size={16} strokeWidth={2.2} className="tv-anim-spin" style={{ color: "var(--color-rose)" }} />
+            <span className="text-[9.5px] font-semibold" style={{ color: "var(--color-wine)" }}>
+              in arrivo…
+            </span>
+          </div>
+        ) : null}
+
         {all.map((choice) => {
           const on = choice.id === selectedId;
           return (
@@ -130,8 +149,18 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
               title={choice.prompt ?? choice.label}
               className="relative h-[68px] w-[92px] shrink-0 overflow-hidden rounded-[10px] transition-all"
               style={{
-                border: `2px solid ${on ? "var(--color-rose)" : "var(--color-line)"}`,
-                boxShadow: on ? "0 0 0 3px rgb(206 66 87 / 0.12)" : "none",
+                border: `2px solid ${
+                  on
+                    ? "var(--color-rose)"
+                    : choice.id === fresh
+                      ? "var(--color-coral)"
+                      : "var(--color-line)"
+                }`,
+                boxShadow: on
+                  ? "0 0 0 3px rgb(206 66 87 / 0.12)"
+                  : choice.id === fresh
+                    ? "0 0 0 3px rgb(255 127 81 / 0.22)"
+                    : "none",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -275,9 +304,21 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
             </div>
 
             {busy ? (
+              <p
+                className="flex items-center gap-1.5 rounded-[8px] px-2.5 py-2 text-[11.5px]"
+                style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
+              >
+                <Loader2 size={13} strokeWidth={2.2} className="tv-anim-spin" />
+                Ci vogliono dai 30 ai 60 secondi. Non ricaricare la pagina: il visual comparirà
+                qui sopra, nel riquadro tratteggiato.
+              </p>
+            ) : !catalogue?.canGenerate ? (
               <p className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-                Può volerci un minuto. Il visual comparirà qui sopra e sarai tu a decidere se
-                usarlo.
+                La generazione non è configurata su questo ambiente.
+              </p>
+            ) : prompt.trim().length < 8 ? (
+              <p className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
+                Scrivi almeno qualche parola per attivare il pulsante.
               </p>
             ) : null}
 

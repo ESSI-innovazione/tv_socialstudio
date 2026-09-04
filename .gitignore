@@ -45,3 +45,4 @@ next-env.d.ts
 
 # output dei test del modello di impaginazione
 .tmp-test
+.preview/
