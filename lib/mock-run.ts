@@ -262,7 +262,7 @@ export function mockScript(run: Run): { at: number; event: RunEvent }[] {
   mark(2100, "brief", "done", "6 fatti · 5 con fonte", 1150);
 
   mark(2200, "copy", "active");
-  log(2350, "copy", "claude-sonnet-5 · voce di brand caricata dal Brand Kit");
+  log(2350, "copy", "voce di brand e regole dei formati caricate dal Brand Kit");
   variants.forEach((v, i) => {
     const at = 2900 + i * 900;
     log(at - 250, "copy", `variante ${i + 1}: impianto «${v.layout}»`);
