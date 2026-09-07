@@ -1,137 +1,50 @@
 import { PHOTOS } from "../brand";
-import { env } from "../env";
 import { objectStore } from "../storage";
 import { recordImage, countImagesLastDay, listRecentImages } from "../db-images";
-import { GAMMA_API_BASE, themeId } from "./gamma-config";
-import {
-  GammaLocalLimitError,
-  GammaNotConfiguredError,
-  GammaQuotaError,
-  GammaRateLimitError,
-  GammaRequestError,
-} from "./gamma-errors";
-import type { ImageChoice, ImagePurpose, ImageRequest, ImageSource } from "./types";
+import { env } from "../env";
+import { generateBytes } from "./flux";
+import { generateWithGamma } from "./gamma-visual";
+import { VisualError, VisualLimitError } from "./visual-errors";
+import type { ImageChoice, ImageRequest, ImageSource, VisualEngine, VisualStyle } from "./types";
 
 /**
  * Da dove vengono i visual.
  *
  * L'archivio aziendale viene prima, sempre: sono fotografie vere di Time
  * Vision, non costano niente e nessun render le batte quando servono persone
- * o aule. La generazione esiste per i key visual astratti, dove non c'e' una
- * fotografia possibile.
+ * o aule. La generazione esiste per i key visual, dove una fotografia non c'e'.
  *
- * Endpoint verificato sulla documentazione:
- *   POST https://public-api.gamma.app/v1.0/images
- *   GET  https://public-api.gamma.app/v1.0/images/{id}
+ * I motori sono due e fanno lo stesso mestiere:
+ *
+ *  - **Gamma** (`gamma-visual.ts`) e' il default quando c'e' la chiave. Rende
+ *    2048px e capisce l'italiano senza che nessuno traduca. Consuma crediti.
+ *  - **Pollinations** (`flux.ts`) e' gratuito, rende 768px e vuole il prompt
+ *    in inglese. E' il ripiego quando non si vogliono spendere crediti.
+ *
+ * Per un periodo Gamma era stato tolto perche' produceva nature morte e
+ * «carta da parati». La colpa non era sua: il nostro prompt elencava
+ * proibizioni («nessun testo, nessun volto») e quell'endpoint non ha un prompt
+ * negativo, quindi le leggeva come soggetto. Corretto il prompt, Gamma e' il
+ * migliore dei due di parecchio. La storia sta per esteso in `gamma-visual.ts`.
  */
 
 /* ------------------------------------------------------------------ */
 /* Limiti                                                               */
 /* ------------------------------------------------------------------ */
 
-/** Ogni immagine consuma crediti. Questo e' il freno giornaliero. */
-export const IMAGE_LIMIT_PER_DAY = 30;
-
-/** Quanto si aspetta un'immagine prima di rinunciare. */
-const POLL_TIMEOUT_MS = 120_000;
-const POLL_INTERVAL_MS = 3_000;
-
-/* ------------------------------------------------------------------ */
-/* Formati                                                              */
-/* ------------------------------------------------------------------ */
-
-type SizePreset = "banner" | "slide" | "social-portrait" | "social-square" | "story";
-
-/** A ogni impiego la sua proporzione, cosi' il ritaglio non mangia il soggetto. */
-const SIZE_FOR: Record<ImagePurpose, SizePreset> = {
-  "poster-a4": "social-portrait",
-  linkedin: "banner",
-  "ig-feed": "social-square",
-  "ig-story": "story",
-  catalogo: "slide",
-};
-
-/* ------------------------------------------------------------------ */
-/* Risposte di Gamma                                                    */
-/* ------------------------------------------------------------------ */
-
-interface CreateImageResponse {
-  imageGenerationId: string;
-  warnings?: { code: string; message: string }[];
-}
-
-interface ImageStatusResponse {
-  status?: "pending" | "completed" | "failed";
-  image?: {
-    url: string;
-    width: number;
-    height: number;
-    format: string;
-    mimeType: string;
-  };
-  error?: { message: string; statusCode: number };
-  credits?: { deducted: number; remaining: number };
-}
-
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!env.gammaApiKey) throw new GammaNotConfiguredError();
-
-  const response = await fetch(`${GAMMA_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "X-API-KEY": env.gammaApiKey,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-
-  if (response.status === 402) {
-    throw new GammaQuotaError(await response.text().catch(() => ""));
-  }
-  if (response.status === 429) {
-    const retry = response.headers.get("retry-after");
-    throw new GammaRateLimitError(retry ? Number.parseInt(retry, 10) : null);
-  }
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new GammaRequestError(response.status, path, detail.slice(0, 200));
-  }
-
-  return (await response.json()) as T;
-}
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Il freno giornaliero. Ora il motore e' gratuito, quindi il tetto non protegge
+ * piu' un budget: protegge un servizio pubblico che non ci deve niente, e la
+ * nostra pazienza quando qualcuno tiene premuto «rigenera».
+ */
+export const IMAGE_LIMIT_PER_DAY = 120;
 
 /* ------------------------------------------------------------------ */
 /* Il prompt                                                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * Aggiunge al testo di chi chiede i vincoli che restano.
- *
- * La prima versione vietava anche «qualunque luogo identificabile», e il
- * risultato erano onde e gradienti: senza un soggetto ammesso, il modello
- * ripiega sempre sullo sfondo decorativo. Il rischio vero non e' mostrare un
- * ufficio o un'aula, che e' normale in un materiale di marketing: e' spacciare
- * una persona sintetica per una persona vera. Quindi si vietano i volti
- * riconoscibili, non gli ambienti.
- */
-export function imagePrompt(req: ImageRequest): string {
-  return [
-    req.prompt.trim(),
-    "Immagine di alta qualita' con un soggetto chiaro e profondita' di campo.",
-    // Il difetto piu' frequente non e' un contenuto sbagliato, e' un'immagine
-    // che non dice niente: onde, gradienti, sfondi da schermata.
-    "Evita sfondi decorativi generici: niente onde astratte, niente gradienti,",
-    "niente texture senza soggetto.",
-    "Dominante calda su bordeaux e vinaccia, accenti corallo e albicocca.",
-    "Nessun testo, nessuna scritta, nessun logo, nessun marchio.",
-    "Nessun volto riconoscibile e nessuna persona reale identificabile:",
-    "figure di spalle, di scorcio o parziali quando servono persone.",
-    "Lascia una zona libera e uniforme per il testo che verra' sovrapposto.",
-  ].join(" ");
-}
+export { visualPrompt, visualPrompt as imagePrompt } from "./flux";
+export { STYLES, DEFAULT_STYLE, isStyle } from "./visual-styles";
 
 /**
  * Vero quando il visual e' stato generato e non viene dall'archivio.
@@ -160,97 +73,93 @@ export const imageSource: ImageSource = {
     }));
   },
 
-  async generate(req: ImageRequest, withTheme = false): Promise<ImageChoice> {
+  async generate(req: ImageRequest): Promise<ImageChoice> {
     const today = await countImagesLastDay();
     if (today >= IMAGE_LIMIT_PER_DAY) {
-      throw new GammaLocalLimitError("daily", IMAGE_LIMIT_PER_DAY);
+      throw new VisualLimitError(IMAGE_LIMIT_PER_DAY);
     }
 
-    const created = await call<CreateImageResponse>("/images", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: imagePrompt(req),
-        type: req.style,
-        sizePreset: SIZE_FOR[req.purpose],
-        // Il tema del workspace NON si passa qui. Su un documento decide
-        // l'impaginazione ed e' quello che vogliamo; su un'immagine decide la
-        // palette e vince sul prompt. Due generazioni consecutive sono uscite
-        // blu e turchesi nonostante il prompt vietasse esplicitamente
-        // entrambi: e' il tema che comanda.
-        ...(withTheme ? { themeId: themeId("brand") } : {}),
-      }),
-    });
+    const engine = pickEngine(req.engine);
+    const produced = engine === "gamma" ? await generateWithGamma(req) : await generateBytes(req);
 
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
-    let status: ImageStatusResponse | null = null;
-
-    while (Date.now() < deadline) {
-      await wait(POLL_INTERVAL_MS);
-      status = await call<ImageStatusResponse>(`/images/${created.imageGenerationId}`);
-
-      if (status.status === "failed") {
-        throw new GammaRequestError(
-          status.error?.statusCode ?? 500,
-          "/images",
-          status.error?.message ?? "generazione dell'immagine fallita",
-        );
-      }
-      if (status.image?.url) break;
-    }
-
-    if (!status?.image?.url) {
-      throw new GammaRequestError(504, "/images", "l'immagine non è arrivata in tempo");
-    }
-
-    // L'indirizzo di Gamma scade in circa una settimana e chiunque ce l'abbia
-    // scarica il file. Si porta a casa subito e si restituisce il nostro.
-    const stored = await rehost(created.imageGenerationId, status.image);
+    // Due generazioni dello stesso prompt non si sovrascrivono a vicenda
+    // nell'archivio: l'id porta il momento e il seme, o l'id del fornitore
+    // quando un seme non c'e'.
+    const id = `${Date.now().toString(36)}-${produced.seed ?? produced.providerId ?? "x"}`;
+    const path = `visual/${id}.${produced.extension}`;
+    const stored = await objectStore().put(path, produced.bytes, produced.mimeType);
 
     const choice: ImageChoice = {
-      id: created.imageGenerationId,
+      id,
       origin: "generated",
       url: stored.url,
       label: req.prompt.slice(0, 80),
-      width: status.image.width,
-      height: status.image.height,
+      width: produced.width,
+      height: produced.height,
       prompt: req.prompt,
-      model: "gamma",
+      model: produced.model,
+      style: req.style,
+      seed: produced.seed,
+      engine,
       createdAt: new Date().toISOString(),
     };
 
     // La provenienza si registra sempre: un visual generato deve poter dire
-    // da quale richiesta è nato, come ogni altro asset.
+    // da quale richiesta è nato, come ogni altro asset. Stile e seme in piu',
+    // perché senza quei due una variante non si sa piu' rifare.
     await recordImage({
       id: choice.id,
       stored_path: stored.path,
       prompt: req.prompt,
-      full_prompt: imagePrompt(req),
+      full_prompt: produced.fullPrompt,
       style: req.style,
       purpose: req.purpose,
       width: choice.width,
       height: choice.height,
-      credits_used: status.credits?.deducted ?? null,
+      credits_used: produced.creditsUsed ?? null,
+      model: produced.model,
+      seed: produced.seed,
     });
 
     return choice;
   },
 };
 
-async function rehost(
-  id: string,
-  image: { url: string; mimeType: string; format: string },
-): Promise<{ path: string; url: string }> {
-  const response = await fetch(image.url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new GammaRequestError(response.status, "download immagine", "scaricamento fallito");
+/**
+ * Una variante di un visual gia' fatto: stesso prompt, stesso stile, seme nuovo.
+ *
+ * E' quello che serve a chi guarda un'immagine e pensa «quasi, ma non questa».
+ */
+export async function regenerate(
+  source: Pick<ImageChoice, "prompt" | "style" | "engine">,
+  purpose: ImageRequest["purpose"],
+): Promise<ImageChoice> {
+  if (!source.prompt) {
+    // Solo un visual d'archivio arriva qui senza prompt, e di quello non c'e'
+    // niente da rigenerare: e' una fotografia, non una richiesta.
+    throw new VisualError("Questo visual non e' stato generato: non c'e' un prompt da rifare.");
   }
 
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const extension = (image.format || "png").replace(/^\./, "");
-  const path = `visual/${id}.${extension}`;
+  // Nessun seme: e' proprio la variazione che si sta cercando. Su Pollinations
+  // il seme lo sorteggia il motore, Gamma non ne ha uno.
+  return imageSource.generate({
+    prompt: source.prompt,
+    purpose,
+    style: source.style ?? "photo",
+    engine: source.engine,
+  });
+}
 
-  const stored = await objectStore().put(path, bytes, image.mimeType || "image/png");
-  return { path, url: stored.url };
+/** Il motore da usare: quello chiesto, o quello configurato. */
+export function pickEngine(asked?: VisualEngine): VisualEngine {
+  if (asked === "gamma") return env.gammaApiKey ? "gamma" : "flux";
+  if (asked === "flux") return "flux";
+  return env.visualEngine;
+}
+
+/** Vero quando Gamma e' utilizzabile su questo ambiente. */
+export function gammaAvailable(): boolean {
+  return Boolean(env.gammaApiKey);
 }
 
 /** I visual generati di recente, per riproporli senza rigenerarli. */
@@ -265,7 +174,10 @@ export async function recentGenerated(limit = 12): Promise<ImageChoice[]> {
     width: row.width,
     height: row.height,
     prompt: row.prompt,
-    model: "gamma",
+    model: row.model ?? "sana",
+    engine: row.model === "gamma" ? "gamma" : "flux",
+    style: row.style as VisualStyle,
+    seed: row.seed ?? undefined,
     createdAt: row.created_at,
   }));
 }

@@ -1,6 +1,9 @@
 /**
- * Verifica dal vivo della generazione di un visual. UNA immagine, che costa
- * crediti. Percorre il codice di produzione e salva il file per guardarlo.
+ * Verifica dal vivo della generazione di un visual: percorre il codice di
+ * produzione e salva il file, perche' su un'immagine l'unico collaudo che
+ * conta e' guardarla.
+ *
+ * Il motore e' gratuito, quindi si puo' rieseguire senza contare i soldi.
  *
  * Esegui con: node scripts/image-live.cjs <cartella>
  */
@@ -35,17 +38,21 @@ const REQ = {
   console.log("origine:", image.origin);
   console.log("dimensioni:", image.width, "x", image.height);
   console.log("url nostro:", image.url);
-  console.log("punta a gamma:", image.url.includes("gamma") ? "SI (problema)" : "no");
+  console.log("modello:", image.model, "· seme:", image.seed);
+  console.log(
+    "punta a un terzo:",
+    /gamma|pollinations/.test(image.url) ? "SI (problema)" : "no",
+  );
 
   const rows = await listRecentImages(3);
   console.log("provenienza registrata:", rows.length > 0 ? "si" : "NO (problema)");
   if (rows[0]) {
     console.log("  prompt salvato:", rows[0].prompt.slice(0, 60) + "…");
-    console.log("  crediti:", rows[0].credits_used);
+    console.log("  modello salvato:", rows[0].model, "· seme:", rows[0].seed);
   }
 
   const stored = await objectStore().get(rows[0].stored_path);
-  const out = path.join(process.argv[2] || ".", "visual-live.png");
+  const out = path.join(process.argv[2] || ".", "visual-live.jpg");
   fs.writeFileSync(out, Buffer.from(stored.data));
   console.log("\nfile scritto:", out, `(${stored.data.byteLength} byte)`);
 })().catch((error) => {

@@ -39,6 +39,35 @@ export const env = {
   get gammaApiKey() {
     return read("GAMMA_API_KEY");
   },
+  /**
+   * Token di Pollinations. Non serve per generare: senza, il motore risponde
+   * lo stesso col modello gratuito. Serve solo ad aprire il catalogo dei
+   * modelli migliori, se un giorno se ne compra uno.
+   */
+  get pollinationsToken() {
+    return read("POLLINATIONS_TOKEN");
+  },
+  /**
+   * Il modello di Pollinations. Senza token l'unico servito e' `sana`:
+   * chiederne un altro non da' errore, da' `sana` in silenzio.
+   */
+  get visualModel() {
+    return read("VISUAL_MODEL") ?? "sana";
+  },
+  /**
+   * Chi genera i visual: `gamma` o `flux`.
+   *
+   * Gamma e' il default quando c'e' la chiave, e non e' una preferenza: rende
+   * 2048px, capisce l'italiano senza traduzione e sbaglia molto meno il
+   * soggetto. Pollinations e' gratuito e resta la scelta quando non si
+   * vogliono spendere crediti, al prezzo di 768px e di un prompt che va
+   * tradotto.
+   */
+  get visualEngine(): "gamma" | "flux" {
+    const choice = read("VISUAL_ENGINE");
+    if (choice === "gamma" || choice === "flux") return choice;
+    return read("GAMMA_API_KEY") ? "gamma" : "flux";
+  },
   get blobToken() {
     return read("BLOB_READ_WRITE_TOKEN");
   },

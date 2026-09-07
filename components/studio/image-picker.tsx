@@ -1,27 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, ImageIcon, Loader2, Maximize2, Sparkles, TriangleAlert, X } from "lucide-react";
-import type { ImageChoice, ImagePurpose } from "@/lib/integrations/types";
+import { Check, ImageIcon, Loader2, Maximize2, RefreshCw, Sparkles, TriangleAlert, X } from "lucide-react";
+import { DEFAULT_STYLE, STYLES } from "@/lib/integrations/visual-styles";
+import type { ImageChoice, ImagePurpose, VisualEngine, VisualStyle } from "@/lib/integrations/types";
 
 /**
  * La scelta del visual, sotto i formati.
  *
- * L'archivio aziendale viene prima ed e' gia' pagato: sono fotografie vere di
- * Time Vision. La generazione e' un secondo passo esplicito, perche' consuma
- * crediti e perche' un render non sostituisce una fotografia quando servono
- * persone o aule.
+ * L'archivio aziendale viene prima: sono fotografie vere di Time Vision, e un
+ * render non le sostituisce quando servono persone o aule. La generazione e'
+ * un secondo passo esplicito, per i key visual dove una fotografia non c'e'.
  *
- * Chi genera vede prima cosa sta per spendere, poi sceglie: il visual entra
- * nella campagna solo quando lo si seleziona.
+ * Il visual entra nella campagna solo quando lo si seleziona. E quando non
+ * convince, «rigenera» ne rifa' una variante con lo stesso prompt: e' la via
+ * normale per cambiare immagine, molto piu' corta che riscrivere la richiesta.
  */
-
-const STYLES: { id: "abstract" | "illustration" | "photo" | "scene"; label: string }[] = [
-  { id: "abstract", label: "Astratto 3D" },
-  { id: "illustration", label: "Illustrazione" },
-  { id: "scene", label: "Scena" },
-  { id: "photo", label: "Fotografico" },
-];
 
 export interface ImagePickerProps {
   /** L'id del visual scelto: un file d'archivio o un generato. */
@@ -34,14 +28,20 @@ export interface ImagePickerProps {
 interface Catalogue {
   archive: ImageChoice[];
   generated: ImageChoice[];
-  canGenerate: boolean;
   remainingToday: number;
+  /** Il motore configurato su questo ambiente. */
+  engine: VisualEngine;
+  gammaAvailable: boolean;
+  /** Riguarda solo Pollinations: Gamma l'italiano lo capisce da se'. */
+  translates: boolean;
 }
 
 export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps) {
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [style, setStyle] = useState<(typeof STYLES)[number]["id"]>("abstract");
+  const [style, setStyle] = useState<VisualStyle>(DEFAULT_STYLE);
+  /** Il motore scelto per questa generazione. Null = quello configurato. */
+  const [engine, setEngine] = useState<VisualEngine | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -59,7 +59,14 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
         if (!cancelled && data) setCatalogue(data);
       })
       .catch(() => {
-        if (!cancelled) setCatalogue({ archive: [], generated: [], canGenerate: false, remainingToday: 0 });
+        if (!cancelled) setCatalogue({
+            archive: [],
+            generated: [],
+            remainingToday: 0,
+            engine: "flux",
+            gammaAvailable: false,
+            translates: false,
+          });
       });
 
     return () => {
@@ -67,44 +74,79 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
     };
   }, []);
 
+  /**
+   * Una richiesta al motore, comune alla prima generazione e alle varianti.
+   *
+   * Il visual nuovo compare fra i generati ma non si seleziona da solo: e' chi
+   * guarda a decidere se entra nella campagna.
+   */
+  const send = useCallback(
+    async (body: Record<string, unknown>): Promise<boolean> => {
+      setError(null);
+
+      try {
+        const response = await fetch("/api/images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ purpose, ...body }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error ?? "Generazione non riuscita.");
+          return false;
+        }
+
+        setCatalogue((current) =>
+          current
+            ? {
+                ...current,
+                generated: [data.image, ...current.generated],
+                remainingToday: Math.max(0, current.remainingToday - 1),
+              }
+            : current,
+        );
+        setFresh(data.image.id);
+        return true;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Generazione non riuscita.");
+        return false;
+      }
+    },
+    [purpose],
+  );
+
   const generate = useCallback(async () => {
     if (prompt.trim().length < 8 || busy) return;
 
     setBusy(true);
-    setError(null);
+    const ok = await send({ prompt, style, ...(engine ? { engine } : {}) });
+    if (ok) setPrompt("");
+    setBusy(false);
+  }, [prompt, style, engine, busy, send]);
 
-    try {
-      const response = await fetch("/api/images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, purpose, style }),
+  /**
+   * Un'altra versione dello stesso visual: stesso prompt, stesso stile, seme
+   * nuovo. Il prompt lo eredita il server dalla riga di provenienza, cosi' una
+   * variante resta legata a cosa era stato chiesto davvero.
+   */
+  const regenerate = useCallback(
+    async (source: ImageChoice) => {
+      if (busy || !source.prompt) return;
+
+      setBusy(true);
+      setPreview(null);
+      const ok = await send({
+        from: { prompt: source.prompt, style: source.style, engine: source.engine },
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error ?? "Generazione non riuscita.");
-        return;
-      }
-
-      // Il visual nuovo compare fra i generati ma non si seleziona da solo:
-      // e' chi guarda a decidere se entra nella campagna.
-      setCatalogue((current) =>
-        current
-          ? {
-              ...current,
-              generated: [data.image, ...current.generated],
-              remainingToday: Math.max(0, current.remainingToday - 1),
-            }
-          : current,
-      );
-      setFresh(data.image.id);
-      setPrompt("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Generazione non riuscita.");
-    } finally {
+      if (ok) setOpen(false);
       setBusy(false);
-    }
-  }, [prompt, purpose, style, busy]);
+    },
+    [busy, send],
+  );
+
+  /** Il motore che verra' davvero usato: la scelta, o il default d'ambiente. */
+  const current: VisualEngine = engine ?? catalogue?.engine ?? "flux";
 
   const all = [...(catalogue?.generated ?? []), ...(catalogue?.archive ?? [])];
   const selected = all.find((c) => c.id === selectedId) ?? null;
@@ -117,7 +159,7 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
           {selected
             ? selected.origin === "archive"
               ? `dall'archivio · ${selected.label}`
-              : "visual generato"
+              : "visual generato · passa sopra la miniatura per rigenerarlo"
             : "l'archivio aziendale è la prima scelta"}
         </span>
       </div>
@@ -190,6 +232,31 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                 </span>
               ) : null}
 
+              {/* Cambiare immagine senza riscrivere il prompt: e' il gesto piu'
+                  frequente, quindi sta sulla miniatura e non in un menu. */}
+              {choice.origin === "generated" && choice.prompt ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Rigenera una variante"
+                  title="Rigenera: stesso prompt, immagine diversa"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void regenerate(choice);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.stopPropagation();
+                      void regenerate(choice);
+                    }
+                  }}
+                  className="absolute bottom-1 left-1 flex h-[18px] w-[18px] items-center justify-center rounded-[5px] opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ background: "rgba(42,17,25,.72)", color: "#ffffff" }}
+                >
+                  <RefreshCw size={10} strokeWidth={2.4} />
+                </span>
+              ) : null}
+
               {/* Ingrandire non e' scegliere: sono due gesti diversi. */}
               <span
                 role="button"
@@ -248,9 +315,9 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
               <div className="flex-1" />
               {catalogue ? (
                 <span className="text-[11px]" style={{ color: "var(--color-ink-faint)" }}>
-                  {catalogue.canGenerate
-                    ? `${catalogue.remainingToday} rimaste oggi · consuma crediti`
-                    : "generazione non configurata"}
+                  {current === "gamma"
+                    ? `${catalogue.remainingToday} rimaste oggi · Gamma, consuma crediti`
+                    : `${catalogue.remainingToday} rimaste oggi · gratuita`}
                 </span>
               ) : null}
             </div>
@@ -267,6 +334,39 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                 color: "var(--color-ink)",
               }}
             />
+
+            {catalogue?.gammaAvailable ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px]" style={{ color: "var(--color-ink-faint)" }}>
+                  MOTORE
+                </span>
+                {(
+                  [
+                    { id: "gamma" as const, label: "Gamma", note: "2048px · crediti" },
+                    { id: "flux" as const, label: "Gratuito", note: "768px" },
+                  ]
+                ).map((e) => {
+                  const on = e.id === current;
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setEngine(e.id)}
+                      aria-pressed={on}
+                      title={e.note}
+                      className="tv-pill h-[28px] px-3 text-[11.5px] transition-colors"
+                      style={{
+                        background: on ? "var(--color-wine)" : "var(--color-paper)",
+                        color: on ? "#ffffff" : "var(--color-ink-soft)",
+                        border: `1px solid ${on ? "var(--color-wine)" : "var(--color-line)"}`,
+                      }}
+                    >
+                      {e.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-1.5">
               {STYLES.map((s) => {
@@ -302,13 +402,11 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
               <button
                 type="button"
                 onClick={generate}
-                disabled={busy || prompt.trim().length < 8 || !catalogue?.canGenerate}
+                disabled={busy || prompt.trim().length < 8}
                 className="tv-pill h-[32px] gap-2 px-4 text-[12.5px] transition-colors"
                 style={{
                   background:
-                    busy || prompt.trim().length < 8 || !catalogue?.canGenerate
-                      ? "var(--color-mute)"
-                      : "var(--color-rose)",
+                    busy || prompt.trim().length < 8 ? "var(--color-mute)" : "var(--color-rose)",
                   color: "#ffffff",
                   cursor: busy ? "wait" : "pointer",
                 }}
@@ -333,16 +431,24 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                 style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
               >
                 <Loader2 size={13} strokeWidth={2.2} className="tv-anim-spin" />
-                Ci vogliono dai 30 ai 60 secondi. Non ricaricare la pagina: il visual comparirà
+                Ci vogliono dai 10 ai 45 secondi. Non ricaricare la pagina: il visual comparirà
                 qui sopra, nel riquadro tratteggiato.
-              </p>
-            ) : !catalogue?.canGenerate ? (
-              <p className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-                La generazione non è configurata su questo ambiente.
               </p>
             ) : prompt.trim().length < 8 ? (
               <p className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
                 Scrivi almeno qualche parola per attivare il pulsante.
+              </p>
+            ) : null}
+
+            {catalogue && current === "flux" && !catalogue.translates ? (
+              <p
+                className="flex items-start gap-1.5 rounded-[8px] px-2.5 py-2 text-[11.5px] leading-[1.45]"
+                style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
+              >
+                <TriangleAlert size={13} strokeWidth={2} className="mt-px shrink-0" />
+                Il prompt parte in italiano: il modello e&apos; addestrato in inglese e tende a
+                perdere il soggetto. Con ANTHROPIC_API_KEY impostata viene tradotto prima, e i
+                visual somigliano molto di piu&apos; a quello che hai scritto.
               </p>
             ) : null}
 
@@ -412,6 +518,23 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
             </p>
 
             <div className="flex items-center gap-2">
+              {preview.origin === "generated" && preview.prompt ? (
+                <button
+                  type="button"
+                  onClick={() => void regenerate(preview)}
+                  disabled={busy}
+                  title="Stesso prompt, stesso stile, immagine diversa"
+                  className="tv-pill h-[36px] gap-2 px-4 text-[13px]"
+                  style={{
+                    border: "1px solid var(--color-line)",
+                    color: busy ? "var(--color-ink-faint)" : "var(--color-wine)",
+                    cursor: busy ? "wait" : "pointer",
+                  }}
+                >
+                  <RefreshCw size={14} strokeWidth={2.2} className={busy ? "tv-anim-spin" : undefined} />
+                  Rigenera
+                </button>
+              ) : null}
               <div className="flex-1" />
               <button
                 type="button"

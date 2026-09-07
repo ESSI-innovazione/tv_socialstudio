@@ -116,7 +116,14 @@ function BlockView({
       ? "linear-gradient(180deg, rgba(114,0,38,.38) 0%, rgba(114,0,38,.86) 56%, rgba(114,0,38,.97) 100%)"
       : sideBand
         ? "linear-gradient(90deg, #720026 0%, rgba(114,0,38,.92) 26%, rgba(114,0,38,0) 100%)"
-        : null;
+        : generated
+          // Un blocco piccolo non regge il velo pieno, ma un visual generato
+          // non puo' restare senza: la sua palette non e' garantita. Una
+          // velatura uniforme e leggera lo riporta dentro il brand senza
+          // coprire il soggetto. Prima `generated` si calcolava e si buttava
+          // via, e il velo su questi blocchi non arrivava mai.
+          ? "linear-gradient(180deg, rgba(114,0,38,.20) 0%, rgba(114,0,38,.20) 100%)"
+          : null;
 
     return (
       <div

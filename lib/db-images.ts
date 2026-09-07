@@ -20,7 +20,12 @@ export interface ImageRow {
   purpose: string;
   width: number;
   height: number;
+  /** Sempre null da quando il motore e' gratuito. Resta per le righe vecchie. */
   credits_used: number | null;
+  /** Il modello che ha prodotto l'immagine. */
+  model?: string | null;
+  /** Il seme: senza, una variante riuscita non si sa piu' rifare. */
+  seed?: number | null;
   created_at: string;
 }
 

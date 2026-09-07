@@ -126,13 +126,32 @@ export interface ImageChoice {
   prompt?: string
   model?: string
   createdAt?: string
+  /** Lo stile e il seme che l'hanno prodotto: servono a rigenerarne una variante. */
+  style?: VisualStyle
+  seed?: number | null
+  engine?: VisualEngine
 }
+
+/**
+ * Tipo di resa. `photo` e' il default: un astratto 3D come punto di partenza
+ * era il motivo per cui i visual uscivano tutti uguali e fuori palette.
+ */
+export type VisualStyle = 'photo' | 'scene' | 'illustration' | 'abstract' | 'lineart'
+
+/** Chi genera. Gamma rende di piu' e costa crediti; flux e' gratuito. */
+export type VisualEngine = 'gamma' | 'flux'
 
 export interface ImageRequest {
   prompt: string
   purpose: ImagePurpose
-  /** Tipo di resa. Il 3D e' quello che il brand usa per i key visual. */
-  style: 'abstract' | 'illustration' | 'photo' | 'scene'
+  style: VisualStyle
+  /** Il motore da usare. Assente si prende quello configurato. */
+  engine?: VisualEngine
+  /**
+   * Il seme del generatore. Assente si sorteggia: e' quello che distingue
+   * «rigenera» — stesso prompt, immagine diversa — da una ripetizione.
+   */
+  seed?: number
 }
 
 export interface ImageSource {
