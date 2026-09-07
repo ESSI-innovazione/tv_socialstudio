@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import { FORMATS, type FormatId } from "@/lib/brand";
 import { getRun } from "@/lib/db";
-import { archetypeFromLabel, templateLayout, type BlockText } from "@/lib/layout-model";
-import { lexend } from "@/lib/render/fonts";
+import { archetypeFromLabel, decodeLayout, templateLayout, type BlockText } from "@/lib/layout-model";
+import { fontsFor } from "@/lib/render/fonts";
 import { AssetCanvas } from "@/components/studio/asset-canvas";
 import { MOCK_VARIANTS, MOCK_BRIEF } from "@/lib/mock-run";
 
@@ -15,7 +15,8 @@ import { MOCK_VARIANTS, MOCK_BRIEF } from "@/lib/mock-run";
  * indirizzo raggiungibile.
  *
  * Disegna lo stesso componente dell'editor. Un solo compositore: quello che
- * sposti e' quello che esce.
+ * sposti e' quello che esce. L'impaginazione modificata arriva nel parametro
+ * `layout`, perche' non ha un posto nel database: senza, esce il template.
  */
 
 export const runtime = "nodejs";
@@ -65,13 +66,14 @@ export async function GET(request: Request, context: { params: Promise<Params> }
     badge: copy.badge,
     disclaimer: copy.disclaimer,
   };
-  const layout = templateLayout(format, archetype, text);
-  const fonts = await lexend();
-
   // L'origine viene dalla richiesta, non dall'ambiente: cosi' le immagini si
   // caricano anche in locale e sui deployment di anteprima, che hanno un host
   // diverso da quello di produzione.
-  const baseUrl = new URL(request.url).origin;
+  const url = new URL(request.url);
+  const baseUrl = url.origin;
+
+  const layout = decodeLayout(url.searchParams.get("layout"), format) ?? templateLayout(format, archetype, text);
+  const fonts = await fontsFor(layout.style?.font);
 
   return new ImageResponse(
     (

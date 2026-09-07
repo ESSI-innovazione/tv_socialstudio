@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Check, ChevronDown, CircleAlert, PencilRuler, RotateCcw, TriangleAlert } from "lucide-react";
 import { FORMATS, UNVERIFIED, type FormatId } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
-import { archetypeFromLabel, templateLayout, type AssetLayout, type BlockText } from "@/lib/layout-model";
+import { archetypeFromLabel, templateLayout, updateBlock, updateStyle, type AssetLayout, type BlockKind, type BlockText, type LayoutStyle } from "@/lib/layout-model";
 import type { GuardCheck, Run, VariantCopy } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { AssetPreview } from "./asset-preview";
@@ -49,20 +49,57 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
   const archetype = archetypeFromLabel(variant?.layout);
   const layoutKey = `${variant?.index ?? 0}:${format}`;
 
-  const text: BlockText = {
-    eyebrow: variant?.eyebrow ?? "",
-    headline: variant?.headline ?? "",
-    subhead: variant?.subhead ?? "",
-    body: variant?.body ?? "",
-    badge: variant?.badge ?? null,
-    disclaimer: variant?.disclaimer ?? null,
-  };
+  const text = blockTextOf(variant);
   const layout = layouts[layoutKey] ?? templateLayout(format, archetype, text);
   const onLayoutChange = useCallback(
     (next: AssetLayout) => setLayouts((current) => ({ ...current, [layoutKey]: next })),
     [layoutKey],
   );
+
+  /**
+   * Carattere e fondo valgono per tutti i formati della variante: chi sceglie
+   * il blu per il poster lo vuole anche sulla story. Ogni formato che non era
+   * ancora stato toccato parte dal suo template, con quella scelta sopra.
+   */
+  const onStyleChange = useCallback(
+    (patch: Partial<LayoutStyle>) => {
+      if (!variant) return;
+      setLayouts((current) => {
+        const next = { ...current };
+        for (const f of run.formats) {
+          const key = `${variant.index}:${f}`;
+          next[key] = updateStyle(current[key] ?? templateLayout(f, archetype, text), patch);
+        }
+        return next;
+      });
+    },
+    [variant, run.formats, archetype, text],
+  );
+
+  /** Il colore di un testo, su tutti i formati in cui quel blocco esiste. */
+  const onColorChange = useCallback(
+    (kind: BlockKind, color: string | undefined) => {
+      if (!variant) return;
+      setLayouts((current) => {
+        const next = { ...current };
+        for (const f of run.formats) {
+          const key = `${variant.index}:${f}`;
+          const base = current[key] ?? templateLayout(f, archetype, text);
+          const target = base.blocks.find((b) => b.kind === kind);
+          if (!target) continue;
+          const patched = updateBlock(base, target.id, { color });
+          next[key] = color === undefined
+            ? { ...patched, blocks: patched.blocks.map((b) => (b.id === target.id ? stripColor(b) : b)) }
+            : patched;
+        }
+        return next;
+      });
+    },
+    [variant, run.formats, archetype, text],
+  );
+
   const modified = Boolean(layouts[layoutKey]);
+  const firstFormat = run.formats[0] ?? "linkedin";
 
   return (
     <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 px-8 py-7">
@@ -107,7 +144,14 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
                 }}
               >
                 <div className="flex justify-center">
-                  <AssetPreview variant={v} format={run.formats[0] ?? "linkedin"} photo={run.brief?.photo} displayWidth={228} />
+                  <AssetPreview
+                    variant={v}
+                    format={firstFormat}
+                    photo={run.brief?.photo}
+                    displayWidth={228}
+                    layout={layouts[`${v.index}:${firstFormat}`] ?? templateLayout(firstFormat, archetypeFromLabel(v.layout), blockTextOf(v))}
+                    archetype={archetypeFromLabel(v.layout)}
+                  />
                 </div>
                 <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
                   <span className="truncate text-[13px]" style={{ color: on ? "var(--color-wine)" : "var(--color-ink-soft)", fontWeight: on ? 600 : 400 }}>
@@ -156,7 +200,7 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
           </div>
 
           <div className="flex justify-center rounded-[12px] py-5" style={{ background: "var(--color-line-soft)" }}>
-            <AssetPreview variant={variant} format={format} photo={run.brief?.photo} displayWidth={PREVIEW_WIDTH[format]} />
+            <AssetPreview variant={variant} format={format} photo={run.brief?.photo} displayWidth={PREVIEW_WIDTH[format]} layout={layout} archetype={archetype} />
           </div>
 
           <Tabs tab={tab} onTab={setTab} facts={run.brief?.facts.length ?? 0} />
@@ -209,8 +253,11 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
           format={format}
           onFormat={setFormat}
           layout={layout}
+          layouts={layouts}
           archetype={archetype}
           onLayoutChange={onLayoutChange}
+          onStyleChange={onStyleChange}
+          onColorChange={onColorChange}
           onEdit={(patch) => onEdit(variant.index, patch)}
           onPhoto={onPhoto}
           user={user}
@@ -223,6 +270,25 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
 }
 
 /* ------------------------------------------------------------------ */
+
+/** Il testo della variante nella forma che il modello di impaginazione legge. */
+function blockTextOf(variant: VariantCopy | undefined): BlockText {
+  return {
+    eyebrow: variant?.eyebrow ?? "",
+    headline: variant?.headline ?? "",
+    subhead: variant?.subhead ?? "",
+    body: variant?.body ?? "",
+    badge: variant?.badge ?? null,
+    disclaimer: variant?.disclaimer ?? null,
+  };
+}
+
+/** Un blocco senza la chiave `color`, non con `color: undefined`: il confronto col template lo pretende. */
+function stripColor<T extends { color?: string }>(block: T): T {
+  const rest = { ...block };
+  delete rest.color;
+  return rest;
+}
 
 function Tabs({ tab, onTab, facts }: { tab: Tab; onTab: (t: Tab) => void; facts: number }) {
   const items: { key: Tab; label: string; badge?: string }[] = [

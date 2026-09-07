@@ -84,5 +84,53 @@ for (const [input, expected] of mapping) {
   check(`archetipo da "${input}"`, archetypeFromLabel(input) === expected, archetypeFromLabel(input));
 }
 
+/* ---------------- colori e stile ---------------- */
+
+const { normalizeHex, isDark, rgba, updateStyle, hasStyle, encodeLayout, decodeLayout, templateLayout } = require("../.tmp-test/layout-model.js");
+// Un layout vero e' quello incolonnato dal template, non quello grezzo: e' quello che l'editor tiene in mano.
+const SAMPLE_TEXT = { eyebrow: "Voucher", headline: "20.000 €", subhead: "a fondo perduto", body: "Il MIMIT copre il 50% delle spese.", badge: "Click-day", disclaimer: "Misura del Ministero." };
+
+check("esadecimale con cancelletto", normalizeHex("#1F4E9C") === "#1f4e9c");
+check("esadecimale senza cancelletto", normalizeHex("1f4e9c") === "#1f4e9c");
+check("esadecimale corto", normalizeHex("#abc") === "#aabbcc");
+check("un nome non e' un colore", normalizeHex("blue") === null);
+check("rgb() non e' un colore", normalizeHex("rgb(1,2,3)") === null);
+check("il vino e' scuro", isDark("#720026") === true);
+check("il bianco e' chiaro", isDark("#ffffff") === false);
+check("un blu pieno e' scuro", isDark("#1f4e9c") === true);
+check("rgba dal vino", rgba("#720026", 0.5) === "rgba(114,0,38,0.5)");
+
+const plain = templateLayout("linkedin", "dato-dominante", SAMPLE_TEXT);
+check("senza scelte non c'e' stile", hasStyle(plain) === false);
+const styled = updateStyle(plain, { background: "#1f4e9c", font: "playfair" });
+check("lo stile si applica", styled.style.background === "#1f4e9c" && styled.style.font === "playfair");
+const reverted = updateStyle(styled, { background: undefined, font: undefined });
+check("tornare al brand kit toglie lo stile del tutto", !("style" in reverted));
+
+const coloured = updateBlock(styled, "headline", { color: "#ffcc00" });
+const roundTrip = decodeLayout(decodeURIComponent(encodeLayout(coloured)), "linkedin");
+// L'ordine delle chiavi non conta: conta che ogni valore torni uguale.
+// E nemmeno un errore di virgola mobile alla diciassettesima cifra, che il clamp produce da solo.
+const canon = (v) => Array.isArray(v) ? v.map(canon) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : typeof v === "number" ? Math.round(v * 1e9) / 1e9 : v;
+check("il layout sopravvive al viaggio nell'URL", roundTrip !== null && JSON.stringify(canon(roundTrip)) === JSON.stringify(canon(coloured)), JSON.stringify(roundTrip));
+const image = roundTrip && roundTrip.blocks.find((b) => b.kind === "image");
+check("l'immagine a pieno formato non viene spinta dentro il margine", image && image.x === 0.5 && image.w === 0.5);
+check("un formato diverso da quello della rotta si scarta", decodeLayout(decodeURIComponent(encodeLayout(coloured)), "ig-feed") === null);
+check("JSON rotto si scarta", decodeLayout("{not json", "linkedin") === null);
+check("niente parametro, niente layout", decodeLayout(null, "linkedin") === null);
+check("blocchi che non sono un elenco si scartano", decodeLayout(JSON.stringify({ format: "linkedin", blocks: "x" }), "linkedin") === null);
+
+const hostile = JSON.stringify({
+  format: "linkedin",
+  blocks: [{ id: "headline", kind: "headline", x: -5, y: 9, w: 40, step: 99, color: "javascript:alert(1)", visible: true }],
+  style: { font: "comic-sans", background: "url(x)" },
+});
+const tamed = decodeLayout(hostile, "linkedin");
+const insetL = safeInset("linkedin");
+check("un blocco fuori margine viene riportato dentro", tamed && tamed.blocks[0].x >= insetL.x - 1e-9 && tamed.blocks[0].x + tamed.blocks[0].w <= 1 - insetL.x + 1e-9);
+check("un passo fuori scala viene riportato in scala", tamed && tamed.blocks[0].step === ladderFor("linkedin").length - 1);
+check("un colore che non e' un colore sparisce", tamed && !("color" in tamed.blocks[0]));
+check("un font sconosciuto e un fondo non valido spariscono", tamed && !("style" in tamed));
+
 console.log(`\n${pass} verifiche passate, ${fail} fallite`);
 process.exit(fail === 0 ? 0 : 1);

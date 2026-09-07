@@ -1,4 +1,5 @@
 import { FORMATS, type FormatId } from "./brand";
+import { isFontId, type FontId } from "./fonts";
 
 /**
  * Il layout di un asset come dato, non come codice.
@@ -53,11 +54,27 @@ export interface Block {
   visible: boolean;
   /** Un blocco bloccato non si sposta: il marchio, per esempio. */
   locked?: boolean;
+  /**
+   * Colore scelto a mano, esadecimale: del testo, o della banda per il
+   * blocco banda. Assente, vale quello del Brand Kit per quel fondo.
+   */
+  color?: string;
+}
+
+/**
+ * Quello che si sceglie oltre al template: il carattere e il fondo. Un asset
+ * senza stile e' un asset del Brand Kit; ogni chiave presente e' una scelta.
+ */
+export interface LayoutStyle {
+  font?: FontId;
+  /** Il fondo dell'asset, esadecimale. Tinge anche il velo sulla foto. */
+  background?: string;
 }
 
 export interface AssetLayout {
   format: FormatId;
   blocks: Block[];
+  style?: LayoutStyle;
   /**
    * Da dove parte la colonna di testo, in frazione di artboard. Serve agli
    * impianti che vogliono il testo in basso sopra la foto: senza questo, il
@@ -320,7 +337,27 @@ export function updateBlock(
 /** Vero quando il layout e' stato toccato rispetto al template. */
 export function isModified(layout: AssetLayout, archetype: ArchetypeId): boolean {
   const base = defaultLayout(layout.format, archetype);
-  return JSON.stringify(base.blocks) !== JSON.stringify(layout.blocks);
+  return JSON.stringify(base.blocks) !== JSON.stringify(layout.blocks) || hasStyle(layout);
+}
+
+/** Vero quando almeno una scelta di stile e' stata fatta. */
+export function hasStyle(layout: AssetLayout): boolean {
+  return Boolean(layout.style && Object.values(layout.style).some((v) => v !== undefined));
+}
+
+/**
+ * Applica una scelta di stile. Una chiave a `undefined` torna al Brand Kit,
+ * e uno stile rimasto vuoto sparisce del tutto: cosi' "nessuna scelta" ha
+ * una sola forma, e il confronto col template resta onesto.
+ */
+export function updateStyle(layout: AssetLayout, patch: Partial<LayoutStyle>): AssetLayout {
+  const merged: LayoutStyle = { ...layout.style, ...patch };
+  const style: LayoutStyle = {};
+  if (merged.font !== undefined) style.font = merged.font;
+  if (merged.background !== undefined) style.background = merged.background;
+  const rest = { ...layout };
+  delete rest.style;
+  return Object.keys(style).length > 0 ? { ...rest, style } : rest;
 }
 
 /**
@@ -536,4 +573,142 @@ export function templateLayout(
   text: BlockText,
 ): AssetLayout {
   return flowLayout(defaultLayout(format, archetype), text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Colori                                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Da quello che uno incolla a un esadecimale canonico: `#RRGGBB` minuscolo.
+ * Accetta con o senza cancelletto e la forma corta a tre cifre. Tutto il
+ * resto — nomi, rgb(), spazi in mezzo — non e' un colore per noi.
+ */
+export function normalizeHex(value: string): string | null {
+  const raw = value.trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{6}$/.test(raw)) return `#${raw}`;
+  if (/^[0-9a-f]{3}$/.test(raw)) return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
+  return null;
+}
+
+function channels(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Luminanza relativa (sRGB, WCAG): sotto 0.4 il testo chiaro regge, sopra no. */
+export function isDark(hex: string): boolean {
+  const lin = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = channels(hex).map(lin);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.4;
+}
+
+/** Lo stesso colore con un'opacita': serve al velo sulla foto. */
+export function rgba(hex: string, alpha: number): string {
+  const [r, g, b] = channels(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Il layout nell'indirizzo                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Il layout viaggia fino al rendering server-side dentro l'URL del PNG.
+ *
+ * Non c'e' un database delle impaginazioni: vivono nella pagina di chi le
+ * fa. Metterle nell'indirizzo tiene l'export un semplice link scaricabile,
+ * e un indirizzo diverso per ogni versione, che e' quello che la cache vuole.
+ */
+export function encodeLayout(layout: AssetLayout): string {
+  return encodeURIComponent(JSON.stringify(layout));
+}
+
+/**
+ * Il contrario, con diffidenza: l'indirizzo lo puo' scrivere chiunque. Ogni
+ * blocco passa dagli stessi vincoli dell'editor, ogni colore dalla stessa
+ * validazione, e un formato che non e' quello della rotta si scarta.
+ */
+export function decodeLayout(raw: string | null | undefined, format: FormatId): AssetLayout | null {
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const input = parsed as Record<string, unknown>;
+  if (input.format !== format || !Array.isArray(input.blocks)) return null;
+
+  const ladder = TYPE_LADDER[format];
+  const blocks: Block[] = [];
+  for (const item of input.blocks) {
+    if (!item || typeof item !== "object") return null;
+    const b = item as Record<string, unknown>;
+    if (typeof b.id !== "string" || typeof b.kind !== "string" || !(b.kind in BLOCK_LABELS)) return null;
+    if (![b.x, b.y, b.w].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+
+    const kind = b.kind as BlockKind;
+    const block: Block = {
+      id: b.id,
+      kind,
+      x: b.x as number,
+      y: b.y as number,
+      w: b.w as number,
+      visible: b.visible !== false,
+    };
+    if (typeof b.h === "number" && Number.isFinite(b.h)) block.h = b.h;
+    if (typeof b.step === "number" && Number.isFinite(b.step)) {
+      block.step = clamp(Math.round(b.step), MIN_STEP[kind], ladder.length - 1);
+    }
+    if (b.align === "left" || b.align === "center" || b.align === "right") block.align = b.align;
+    if (b.focal && typeof b.focal === "object") {
+      const f = b.focal as Record<string, unknown>;
+      if (typeof f.x === "number" && typeof f.y === "number") {
+        block.focal = { x: clamp(f.x, 0, 1), y: clamp(f.y, 0, 1) };
+      }
+    }
+    if (b.locked === true) block.locked = true;
+    if (typeof b.color === "string") {
+      const hex = normalizeHex(b.color);
+      if (hex) block.color = hex;
+    }
+    // L'immagine puo' stare a pieno formato, fuori dal margine di sicurezza:
+    // per lei basta restare dentro l'artboard. Il testo no.
+    blocks.push(
+      kind === "image"
+        ? {
+            ...block,
+            x: clamp(block.x, 0, 1),
+            y: clamp(block.y, 0, 1),
+            w: clamp(block.w, 0, 1),
+            ...(block.h === undefined ? {} : { h: clamp(block.h, 0, 1) }),
+          }
+        : clampBlock(format, block),
+    );
+  }
+
+  let layout: AssetLayout = { format, blocks };
+  if (typeof input.flowStart === "number" && Number.isFinite(input.flowStart)) {
+    layout.flowStart = clamp(input.flowStart, 0, 1);
+  }
+
+  if (input.style && typeof input.style === "object") {
+    const s = input.style as Record<string, unknown>;
+    const patch: Partial<LayoutStyle> = {};
+    if (isFontId(s.font)) patch.font = s.font;
+    if (typeof s.background === "string") {
+      const hex = normalizeHex(s.background);
+      if (hex) patch.background = hex;
+    }
+    layout = updateStyle(layout, patch);
+  }
+
+  return layout;
 }

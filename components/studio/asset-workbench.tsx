@@ -12,15 +12,32 @@ import {
   Hash,
   Image as ImageIcon,
   Layers,
-  Lock,
+  Minus,
   Palette,
+  Plus,
   Presentation,
+  RotateCcw,
   Send,
   Share2,
   Type,
 } from "lucide-react";
-import { FORMATS, type FormatId } from "@/lib/brand";
-import type { ArchetypeId, AssetLayout } from "@/lib/layout-model";
+import { BRAND, FORMATS, type FormatId } from "@/lib/brand";
+import { DEFAULT_FONT, FONTS, FONT_IDS, fontFamilyFor } from "@/lib/fonts";
+import {
+  BLOCK_LABELS,
+  encodeLayout,
+  fontSizeOf,
+  ladderFor,
+  minStepOf,
+  normalizeHex,
+  updateBlock,
+  type ArchetypeId,
+  type AssetLayout,
+  type Block,
+  type BlockKind,
+  type LayoutStyle,
+} from "@/lib/layout-model";
+import { defaultTextColor, groundOf } from "./asset-canvas";
 import type { Caption, Run, VariantCopy } from "@/lib/types";
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
@@ -32,8 +49,14 @@ interface Props {
   format: FormatId;
   onFormat: (f: FormatId) => void;
   layout: AssetLayout;
+  /** Tutte le impaginazioni toccate, per chiave `variante:formato`: servono ai link di export. */
+  layouts: Record<string, AssetLayout>;
   archetype: ArchetypeId;
   onLayoutChange: (layout: AssetLayout) => void;
+  /** Carattere e fondo: valgono per tutti i formati della variante. */
+  onStyleChange: (patch: Partial<LayoutStyle>) => void;
+  /** Il colore di un testo, su tutti i formati. `undefined` torna al Brand Kit. */
+  onColorChange: (kind: BlockKind, color: string | undefined) => void;
   onEdit: (patch: Partial<VariantCopy>) => void;
   onPhoto: (url: string) => void;
   user: StudioUser;
@@ -59,6 +82,10 @@ const CANVAS_WIDTH: Record<FormatId, number> = {
  * Quello che oggi parte davvero e' l'export PNG. PDF, SVG, PPTX e i canali
  * social sono al loro posto ma si dichiarano non ancora attivi: un bottone
  * che finge sarebbe peggio di un bottone che aspetta.
+ *
+ * Il pannello Testo e' anche quello dello stile: carattere, fondo, corpo e
+ * colore di ogni testo. Il Brand Kit resta il punto di partenza — ogni
+ * controllo ha un ritorno al brand — ma non e' piu' un lucchetto.
  */
 export function AssetWorkbench({
   run,
@@ -66,8 +93,11 @@ export function AssetWorkbench({
   format,
   onFormat,
   layout,
+  layouts,
   archetype,
   onLayoutChange,
+  onStyleChange,
+  onColorChange,
   onEdit,
   onPhoto,
   user,
@@ -147,7 +177,15 @@ export function AssetWorkbench({
           <Tool icon={Type} label="Testo" on={panel === "testo"} onClick={() => setPanel("testo")} />
           <Tool icon={ImageIcon} label="Foto" on={panel === "foto"} onClick={() => setPanel("foto")} />
           <Tool icon={Layers} label="Livelli" on={false} onClick={() => document.getElementById("workbench-layers")?.scrollIntoView({ behavior: "smooth", block: "nearest" })} />
-          <Tool icon={Palette} label="Colori" on={false} locked onClick={() => {}} />
+          <Tool
+            icon={Palette}
+            label="Colori"
+            on={false}
+            onClick={() => {
+              setPanel("testo");
+              window.setTimeout(() => document.getElementById("workbench-style")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+            }}
+          />
           <div className="flex-1" />
           <Tool icon={Download} label="Esporta" on={panel === "esporta"} onClick={() => setPanel("esporta")} />
           <Tool icon={Share2} label="Pubblica" on={panel === "pubblica"} onClick={() => setPanel("pubblica")} />
@@ -162,9 +200,19 @@ export function AssetWorkbench({
 
         {/* ---------------- pannello ---------------- */}
         <aside className="tv-scroll flex w-[340px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5" style={{ borderLeft: "1px solid var(--color-line)" }}>
-          {panel === "testo" ? <TextPanel variant={variant} onEdit={onEdit} /> : null}
+          {panel === "testo" ? (
+            <TextPanel
+              variant={variant}
+              layout={layout}
+              archetype={archetype}
+              onEdit={onEdit}
+              onLayoutChange={onLayoutChange}
+              onStyleChange={onStyleChange}
+              onColorChange={onColorChange}
+            />
+          ) : null}
           {panel === "foto" ? <PhotoPanel current={photo} onPhoto={onPhoto} /> : null}
-          {panel === "esporta" ? <ExportPanel run={run} variant={variant} /> : null}
+          {panel === "esporta" ? <ExportPanel run={run} variant={variant} layouts={layouts} /> : null}
           {panel === "pubblica" ? <PublishPanel run={run} user={user} channelsLive={channelsLive} /> : null}
         </aside>
       </div>
@@ -174,20 +222,17 @@ export function AssetWorkbench({
 
 /* ------------------------------------------------------------------ */
 
-function Tool({ icon: Icon, label, on, locked, onClick }: { icon: typeof Type; label: string; on: boolean; locked?: boolean; onClick: () => void }) {
+function Tool({ icon: Icon, label, on, onClick }: { icon: typeof Type; label: string; on: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      title={locked ? "La palette è bloccata dal Brand Kit" : label}
+      title={label}
       className="flex w-[64px] cursor-pointer flex-col items-center gap-1 rounded-[10px] py-2 text-[11px] font-semibold transition-colors hover:bg-line-soft"
-      style={{ background: on ? "var(--color-wine-tint)" : "transparent", color: on ? "var(--color-wine)" : locked ? "var(--color-ink-faint)" : "var(--color-ink-soft)" }}
+      style={{ background: on ? "var(--color-wine-tint)" : "transparent", color: on ? "var(--color-wine)" : "var(--color-ink-soft)" }}
     >
-      <span className="relative">
-        <Icon size={19} strokeWidth={1.9} />
-        {locked ? <Lock size={9} strokeWidth={2.5} className="absolute -right-1.5 -bottom-1" /> : null}
-      </span>
+      <Icon size={19} strokeWidth={1.9} />
       {label}
     </button>
   );
@@ -208,22 +253,250 @@ function PanelTitle({ children, hint }: { children: string; hint?: string }) {
 
 /* ---------------- testo ---------------- */
 
-function TextPanel({ variant, onEdit }: { variant: VariantCopy; onEdit: (patch: Partial<VariantCopy>) => void }) {
+function TextPanel({
+  variant,
+  layout,
+  archetype,
+  onEdit,
+  onLayoutChange,
+  onStyleChange,
+  onColorChange,
+}: {
+  variant: VariantCopy;
+  layout: AssetLayout;
+  archetype: ArchetypeId;
+  onEdit: (patch: Partial<VariantCopy>) => void;
+  onLayoutChange: (layout: AssetLayout) => void;
+  onStyleChange: (patch: Partial<LayoutStyle>) => void;
+  onColorChange: (kind: BlockKind, color: string | undefined) => void;
+}) {
+  const ground = groundOf(archetype, layout.style);
+
+  /** Corpo e colore del blocco di quel tipo, se l'impianto lo prevede. */
+  const styleRow = (kind: BlockKind) => {
+    const block = layout.blocks.find((b) => b.kind === kind);
+    if (!block) return null;
+    return (
+      <StyleRow
+        block={block}
+        format={layout.format}
+        fallback={defaultTextColor(kind, ground.onDark)}
+        onStep={(step) => onLayoutChange(updateBlock(layout, block.id, { step }))}
+        onColor={(color) => onColorChange(kind, color)}
+      />
+    );
+  };
+
   return (
     <>
-      <PanelTitle hint="Una modifica qui vale per tutti i formati della variante.">TESTO</PanelTitle>
-      <Field label="Occhiello" value={variant.eyebrow} onChange={(eyebrow) => onEdit({ eyebrow })} />
-      <Field label="Titolo" value={variant.headline} size="lg" onChange={(headline) => onEdit({ headline })} />
-      <Field label="Sottotitolo" value={variant.subhead} onChange={(subhead) => onEdit({ subhead })} />
-      <Field label="Testo" value={variant.body} multiline onChange={(body) => onEdit({ body })} />
-      <Field label="Banda" value={variant.badge ?? ""} onChange={(badge) => onEdit({ badge: badge || null })} />
-      <Field label="Pulsante" value={variant.cta_label} onChange={(cta_label) => onEdit({ cta_label })} />
-      <Field label="Disclaimer" value={variant.disclaimer ?? ""} multiline onChange={(disclaimer) => onEdit({ disclaimer: disclaimer || null })} />
+      <PanelTitle hint="Il testo, il carattere, il fondo e i colori valgono per tutti i formati della variante. Il corpo vale per questo formato.">
+        TESTO
+      </PanelTitle>
+      <StyleSection layout={layout} archetype={archetype} onStyleChange={onStyleChange} />
+      <Field label="Occhiello" value={variant.eyebrow} onChange={(eyebrow) => onEdit({ eyebrow })}>
+        {styleRow("eyebrow")}
+      </Field>
+      <Field label="Titolo" value={variant.headline} size="lg" onChange={(headline) => onEdit({ headline })}>
+        {styleRow("headline")}
+      </Field>
+      <Field label="Sottotitolo" value={variant.subhead} onChange={(subhead) => onEdit({ subhead })}>
+        {styleRow("subhead")}
+      </Field>
+      <Field label="Testo" value={variant.body} multiline onChange={(body) => onEdit({ body })}>
+        {styleRow("body")}
+      </Field>
+      <Field label="Banda" value={variant.badge ?? ""} onChange={(badge) => onEdit({ badge: badge || null })}>
+        {styleRow("badge")}
+      </Field>
+      <Field label="Pulsante" value={variant.cta_label} onChange={(cta_label) => onEdit({ cta_label })}>
+        {styleRow("cta")}
+      </Field>
+      <Field label="Disclaimer" value={variant.disclaimer ?? ""} multiline onChange={(disclaimer) => onEdit({ disclaimer: disclaimer || null })}>
+        {styleRow("disclaimer")}
+      </Field>
     </>
   );
 }
 
-function Field({ label, value, onChange, size = "sm", multiline = false }: { label: string; value: string; onChange: (v: string) => void; size?: "sm" | "lg"; multiline?: boolean }) {
+/** Le tinte proposte per il fondo. Le prime sono del Brand Kit, le altre due sono le richieste piu' frequenti. */
+const BACKGROUNDS: { hex: string; label: string }[] = [
+  { hex: BRAND.wine, label: "Vino" },
+  { hex: BRAND.ink, label: "Inchiostro" },
+  { hex: BRAND.rose, label: "Rosa" },
+  { hex: BRAND.coral, label: "Corallo" },
+  { hex: "#1f4e9c", label: "Blu" },
+  { hex: "#0f5c4a", label: "Verde" },
+  { hex: BRAND.warmTint, label: "Crema" },
+  { hex: BRAND.paper, label: "Bianco" },
+];
+
+/** Carattere e fondo: le due scelte che cambiano l'asset intero. */
+function StyleSection({ layout, archetype, onStyleChange }: { layout: AssetLayout; archetype: ArchetypeId; onStyleChange: (patch: Partial<LayoutStyle>) => void }) {
+  const font = layout.style?.font ?? DEFAULT_FONT;
+  const brandGround = groundOf(archetype);
+  const background = layout.style?.background;
+  const shown = background ?? brandGround.bg;
+
+  return (
+    <section id="workbench-style" className="flex flex-col gap-3.5 rounded-[12px] p-3" style={{ background: "var(--color-line-soft)" }}>
+      <div>
+        <p className="tv-label">CARATTERE</p>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          {FONT_IDS.map((id) => {
+            const on = id === font;
+            const spec = FONTS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onStyleChange({ font: id === DEFAULT_FONT ? undefined : id })}
+                aria-pressed={on}
+                className="flex h-[40px] cursor-pointer flex-col items-start justify-center rounded-[9px] px-2.5 text-left transition-colors"
+                style={{
+                  background: on ? "var(--color-wine)" : "var(--color-paper)",
+                  color: on ? "#ffffff" : "var(--color-ink)",
+                  border: `1px solid ${on ? "var(--color-wine)" : "var(--color-line)"}`,
+                  fontFamily: fontFamilyFor(id, "browser"),
+                }}
+              >
+                <span className="text-[13.5px] leading-none font-semibold">{spec.label}</span>
+                <span className="mt-1 text-[10px] leading-none" style={{ color: on ? "rgba(255,255,255,.72)" : "var(--color-ink-faint)" }}>
+                  {spec.note}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className="tv-label">FONDO</p>
+        <p className="mt-1 text-[11.5px] leading-[1.45]" style={{ color: "var(--color-ink-faint)" }}>
+          Il Brand Kit propone il vino. Scegli una tinta, incolla un codice o apri il selettore.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {BACKGROUNDS.map((b) => {
+            const on = shown === b.hex;
+            return (
+              <button
+                key={b.hex}
+                type="button"
+                title={b.label}
+                aria-label={`Fondo ${b.label}`}
+                aria-pressed={on}
+                onClick={() => onStyleChange({ background: b.hex === brandGround.bg ? undefined : b.hex })}
+                className="h-[24px] w-[24px] cursor-pointer rounded-full transition-transform hover:scale-110"
+                style={{ background: b.hex, border: `2px solid ${on ? "var(--color-rose)" : "var(--color-line)"}`, boxShadow: "inset 0 0 0 1.5px #ffffff" }}
+              />
+            );
+          })}
+        </div>
+        <div className="mt-2">
+          <ColorControl label="Fondo" value={background} fallback={brandGround.bg} onChange={(hex) => onStyleChange({ background: hex })} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Corpo a passi e colore, sotto al campo di testo a cui si riferiscono. */
+function StyleRow({ block, format, fallback, onStep, onColor }: { block: Block; format: FormatId; fallback: string; onStep: (step: number) => void; onColor: (color: string | undefined) => void }) {
+  const ladder = ladderFor(format);
+  const size = fontSizeOf(format, block);
+  const current = block.step ?? ladder.indexOf(size);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px]" style={{ color: "var(--color-ink-faint)" }}>
+        Corpo
+      </span>
+      <StepButton icon={Minus} label={`Riduci ${BLOCK_LABELS[block.kind].toLowerCase()}`} disabled={current <= minStepOf(block.kind)} onClick={() => onStep(current - 1)} />
+      <span className="tv-mono w-[42px] text-center text-[11px]" style={{ color: "var(--color-ink)" }}>
+        {size} px
+      </span>
+      <StepButton icon={Plus} label={`Ingrandisci ${BLOCK_LABELS[block.kind].toLowerCase()}`} disabled={current >= ladder.length - 1} onClick={() => onStep(current + 1)} />
+      <div className="flex-1" />
+      <ColorControl label={`Colore ${BLOCK_LABELS[block.kind].toLowerCase()}`} value={block.color} fallback={fallback} onChange={onColor} />
+    </div>
+  );
+}
+
+function StepButton({ icon: Icon, label, disabled, onClick }: { icon: typeof Minus; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] transition-colors"
+      style={{
+        border: "1px solid var(--color-line)",
+        background: "var(--color-paper)",
+        color: disabled ? "var(--color-mute)" : "var(--color-ink-soft)",
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <Icon size={12} strokeWidth={2.4} />
+    </button>
+  );
+}
+
+/**
+ * Un colore in tre modi: il selettore del sistema, un codice incollato, o il
+ * ritorno al brand. Il campo accetta solo esadecimali; quello che non lo e'
+ * resta scritto ma non si applica, e al blur torna il valore vero.
+ */
+function ColorControl({ label, value, fallback, onChange }: { label: string; value: string | undefined; fallback: string; onChange: (hex: string | undefined) => void }) {
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+  const shown = value ?? fallback;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <label
+        className="relative block h-[26px] w-[26px] shrink-0 cursor-pointer overflow-hidden rounded-[7px]"
+        style={{ background: shown, border: "1px solid var(--color-line)", boxShadow: "inset 0 0 0 1.5px #ffffff" }}
+        title={`${label}: apri il selettore`}
+      >
+        <input
+          type="color"
+          value={shown}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={`${label}, selettore`}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </label>
+      <input
+        value={draft}
+        placeholder={fallback}
+        spellCheck={false}
+        aria-label={`${label}, codice esadecimale`}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const hex = normalizeHex(e.target.value);
+          if (hex) onChange(hex);
+        }}
+        onBlur={() => setDraft(value ?? "")}
+        className="tv-mono h-[26px] w-[84px] rounded-[7px] px-2 text-[11.5px] outline-none focus:shadow-focus"
+        style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          aria-label={`${label}: torna al Brand Kit`}
+          title="Torna al Brand Kit"
+          className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-[7px] transition-colors hover:bg-paper"
+          style={{ color: "var(--color-ink-faint)" }}
+        >
+          <RotateCcw size={12} strokeWidth={2.2} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, size = "sm", multiline = false, children }: { label: string; value: string; onChange: (v: string) => void; size?: "sm" | "lg"; multiline?: boolean; children?: React.ReactNode }) {
   const style = {
     border: "1px solid var(--color-line)",
     background: "var(--color-paper)",
@@ -232,14 +505,17 @@ function Field({ label, value, onChange, size = "sm", multiline = false }: { lab
     fontWeight: size === "lg" ? 600 : 400,
   } as const;
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="tv-label">{label.toUpperCase()}</span>
-      {multiline ? (
-        <textarea value={value} rows={3} onChange={(e) => onChange(e.target.value)} className="tv-scroll w-full resize-none rounded-[10px] px-3 py-2.5 leading-[1.5] outline-none focus:shadow-focus" style={style} />
-      ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-[10px] px-3 py-2.5 outline-none focus:shadow-focus" style={style} />
-      )}
-    </label>
+    <div className="flex flex-col gap-1.5">
+      <label className="flex flex-col gap-1.5">
+        <span className="tv-label">{label.toUpperCase()}</span>
+        {multiline ? (
+          <textarea value={value} rows={3} onChange={(e) => onChange(e.target.value)} className="tv-scroll w-full resize-none rounded-[10px] px-3 py-2.5 leading-[1.5] outline-none focus:shadow-focus" style={style} />
+        ) : (
+          <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-[10px] px-3 py-2.5 outline-none focus:shadow-focus" style={style} />
+        )}
+      </label>
+      {children}
+    </div>
   );
 }
 
@@ -312,7 +588,7 @@ const FILE_TYPES: { id: FileType; label: string; hint: string; icon: typeof File
   { id: "pptx", label: "PPTX", hint: "una slide per formato", icon: Presentation, ready: false },
 ];
 
-function ExportPanel({ run, variant }: { run: Run; variant: VariantCopy }) {
+function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy; layouts: Record<string, AssetLayout> }) {
   const [type, setType] = useState<FileType>("png");
   const [formats, setFormats] = useState<FormatId[]>(run.formats);
   const [all, setAll] = useState(false);
@@ -383,10 +659,15 @@ function ExportPanel({ run, variant }: { run: Run; variant: VariantCopy }) {
         <div className="flex flex-col gap-1.5">
           <p className="tv-label">SCARICA</p>
           {variants.flatMap((v) =>
-            formats.map((f) => (
+            formats.map((f) => {
+              // L'impaginazione modificata non ha un posto nel database:
+              // viaggia nel link, e il PNG esce come lo si vede.
+              const custom = layouts[`${v.index}:${f}`];
+              const href = `/api/render/${run.id}/${v.index}/${f}.png${custom ? `?layout=${encodeLayout(custom)}` : ""}`;
+              return (
               <a
                 key={`${v.index}-${f}`}
-                href={`/api/render/${run.id}/${v.index}/${f}.png`}
+                href={href}
                 download={`timevision-v${v.index + 1}-${f}.png`}
                 className="tv-pill h-[38px] gap-2 px-3.5 text-[13px] transition-colors hover:bg-line-soft"
                 style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
@@ -397,7 +678,8 @@ function ExportPanel({ run, variant }: { run: Run; variant: VariantCopy }) {
                   {FORMATS[f].width}×{FORMATS[f].height}
                 </span>
               </a>
-            )),
+              );
+            }),
           )}
           {formats.length === 0 ? (
             <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>

@@ -1,5 +1,7 @@
 import { BRAND, FONT_FAMILY, FORMATS, type FormatId } from "@/lib/brand";
+import { archetypeFromLabel, type ArchetypeId, type AssetLayout } from "@/lib/layout-model";
 import type { VariantCopy } from "@/lib/types";
+import { AssetCanvas } from "./asset-canvas";
 
 /**
  * Composizione di un asset alla sua dimensione nativa, riscalata per stare
@@ -13,9 +15,16 @@ interface Props {
   photo?: string;
   /** Larghezza a cui mostrare l'anteprima. L'altezza segue il rapporto. */
   displayWidth: number;
+  /**
+   * Con un layout si disegna il compositore dell'editor, lo stesso che fa il
+   * PNG: e' l'anteprima onesta dei risultati. Senza, la composizione fissa
+   * di sempre, che basta al monitor e alla colonna di destra.
+   */
+  layout?: AssetLayout;
+  archetype?: ArchetypeId;
 }
 
-export function AssetPreview({ variant, format, photo = "tv-digitale.jpg", displayWidth }: Props) {
+export function AssetPreview({ variant, format, photo = "tv-digitale.jpg", displayWidth, layout, archetype }: Props) {
   const spec = FORMATS[format];
   const scale = displayWidth / spec.width;
 
@@ -37,7 +46,11 @@ export function AssetPreview({ variant, format, photo = "tv-digitale.jpg", displ
           transformOrigin: "top left",
         }}
       >
-        <Composition variant={variant} format={format} photo={photo} />
+        {layout ? (
+          <AssetCanvas copy={variant} layout={layout} archetype={archetype ?? archetypeFromLabel(variant.layout)} photo={photo} />
+        ) : (
+          <Composition variant={variant} format={format} photo={photo} />
+        )}
       </div>
     </div>
   );
