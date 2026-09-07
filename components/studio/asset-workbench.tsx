@@ -443,7 +443,8 @@ function PublishPanel({ run, user, channelsLive }: { run: Run; user: StudioUser;
 
       <Channel icon={Building2} name="LinkedIn" handle="Pagina Time Vision" live={channelsLive} caption={linkedin} blocked={blocked} approver={approver} />
 
-      <Channel icon={Hash} name="Slack" handle="condividi col team" live={false} caption={null} blocked={false} approver={true} verb="Condividi">
+      {/* Slack non e' ancora collegato: il canale c'e', il webhook arriva dopo. Il brand guard vale anche qui. */}
+      <Channel icon={Hash} name="Slack" handle="condividi col team" live={false} caption={null} blocked={blocked} approver={true} verb="Condividi">
         <select className="h-[34px] w-full rounded-[8px] px-2 text-[12.5px]" style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }} defaultValue={SLACK_CHANNELS[0]}>
           {SLACK_CHANNELS.map((c) => (
             <option key={c}>{c}</option>

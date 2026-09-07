@@ -72,13 +72,13 @@ const ImageCard = ({ src, priority, onLoad }: ImageCardProps) => {
         sizes="(max-width: 768px) 34vw, 22vw"
         priority={priority}
         onLoad={onLoad}
-        className="object-cover grayscale contrast-[1.4] brightness-[0.5]"
+        className="object-cover grayscale contrast-[1.3] brightness-[0.78]"
       />
       {/* Duotone: la luminosita' resta della foto, il colore diventa vino. */}
       <div className="absolute inset-0 bg-wine mix-blend-color" />
       {/* Il moltiplicato tiene giu' le alte luci: niente rosa slavato. */}
-      <div className="absolute inset-0 bg-wine/45 mix-blend-multiply" />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(26,10,17,.18)_0%,rgba(26,10,17,.55)_100%)]" />
+      <div className="absolute inset-0 bg-wine/25 mix-blend-multiply" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(26,10,17,.08)_0%,rgba(26,10,17,.32)_100%)]" />
     </div>
   );
 };
@@ -253,11 +253,11 @@ export default function ParallaxUnfurlingGallery({
               z-index non conta piu', conta la profondita', e la matrice
               passerebbe davanti. Qui invece coprono sempre.
             */}
-            <div className="pointer-events-none absolute inset-0 z-10 bg-night/32" />
+            <div className="pointer-events-none absolute inset-0 z-10 bg-night/14" />
             <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0_70px_120px_-40px_rgba(26,10,17,1),inset_0_-70px_120px_-40px_rgba(26,10,17,1)] md:shadow-[inset_0_150px_200px_-40px_rgba(26,10,17,1),inset_0_-150px_200px_-40px_rgba(26,10,17,1)]" />
             <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_55px_0_110px_-40px_rgba(26,10,17,1),inset_-55px_0_110px_-40px_rgba(26,10,17,1)] md:shadow-[inset_200px_0_200px_-40px_rgba(26,10,17,1),inset_-200px_0_200px_-40px_rgba(26,10,17,1)]" />
             {/* Il centro si abbassa: quello che sta sopra ha sempre contrasto. */}
-            <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(ellipse_90%_42%_at_50%_50%,rgba(26,10,17,.72)_0%,rgba(26,10,17,.28)_60%,rgba(26,10,17,0)_100%)] md:bg-[radial-gradient(ellipse_58%_62%_at_50%_50%,rgba(26,10,17,.74)_0%,rgba(26,10,17,.3)_55%,rgba(26,10,17,0)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(ellipse_90%_42%_at_50%_50%,rgba(26,10,17,.46)_0%,rgba(26,10,17,.16)_60%,rgba(26,10,17,0)_100%)] md:bg-[radial-gradient(ellipse_58%_62%_at_50%_50%,rgba(26,10,17,.48)_0%,rgba(26,10,17,.18)_55%,rgba(26,10,17,0)_100%)]" />
 
             {children ? (
               <div className="relative z-30 flex h-full w-full items-center justify-center">
