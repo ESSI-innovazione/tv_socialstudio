@@ -35,9 +35,23 @@ import type { ImageChoice, ImagePurpose, VisualEngine, VisualStyle } from "@/lib
 export interface ImagePickerProps {
   /** L'id del visual scelto: un file d'archivio o un generato. */
   selectedId: string | null;
+  /**
+   * In alternativa all'id, l'indirizzo o il nome del file in uso: e' quello
+   * che l'esecuzione conosce del suo visual, e basta a ritrovarlo in griglia.
+   */
+  selectedUrl?: string | null;
   onSelect: (choice: ImageChoice | null) => void;
   /** Il formato principale, che decide la proporzione del visual generato. */
   purpose: ImagePurpose;
+  /** Senza la riga d'intestazione: per quando un titolo c'e' gia' sopra. */
+  compact?: boolean;
+}
+
+/** Vero quando la scelta e' quella in uso, comunque la si nomini. */
+function isChosen(choice: ImageChoice, selectedId: string | null, selectedUrl: string | null | undefined): boolean {
+  if (choice.id === selectedId) return true;
+  if (!selectedUrl) return false;
+  return choice.url === selectedUrl || choice.id === selectedUrl || choice.url === `/brand/${selectedUrl}`;
 }
 
 interface Catalogue {
@@ -51,7 +65,7 @@ interface Catalogue {
   translates: boolean;
 }
 
-export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps) {
+export function ImagePicker({ selectedId, selectedUrl = null, onSelect, purpose, compact = false }: ImagePickerProps) {
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState<VisualStyle>(DEFAULT_STYLE);
@@ -206,13 +220,13 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
   const current: VisualEngine = engine ?? catalogue?.engine ?? "flux";
 
   const all = [...(catalogue?.generated ?? []), ...(catalogue?.archive ?? [])];
-  const selected = all.find((c) => c.id === selectedId) ?? null;
+  const selected = all.find((c) => isChosen(c, selectedId, selectedUrl)) ?? null;
   /** L'ultimo arrivato, finche' e' ancora da decidere: tenerlo o no. */
   const freshChoice = catalogue?.generated.find((c) => c.id === fresh) ?? null;
 
   return (
     <section>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 pb-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 pb-2.5" hidden={compact}>
         <p className="tv-label">VISUAL</p>
         <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
           {selected
@@ -244,7 +258,7 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
         ) : null}
 
         {all.map((choice) => {
-          const on = choice.id === selectedId;
+          const on = isChosen(choice, selectedId, selectedUrl);
           return (
             <button
               key={choice.id}

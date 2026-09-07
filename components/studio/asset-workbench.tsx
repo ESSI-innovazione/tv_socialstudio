@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Building2,
   Camera,
-  Check,
   Download,
   FileImage,
   FileText,
@@ -39,9 +38,9 @@ import {
 } from "@/lib/layout-model";
 import { defaultTextColor, groundOf } from "./asset-canvas";
 import type { Caption, Run, VariantCopy } from "@/lib/types";
-import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { AssetEditor } from "./asset-editor";
+import { ImagePicker } from "./image-picker";
 
 interface Props {
   run: Run;
@@ -211,7 +210,7 @@ export function AssetWorkbench({
               onColorChange={onColorChange}
             />
           ) : null}
-          {panel === "foto" ? <PhotoPanel current={photo} onPhoto={onPhoto} /> : null}
+          {panel === "foto" ? <PhotoPanel current={photo} format={format} onPhoto={onPhoto} /> : null}
           {panel === "esporta" ? <ExportPanel run={run} variant={variant} layouts={layouts} /> : null}
           {panel === "pubblica" ? <PublishPanel run={run} user={user} channelsLive={channelsLive} /> : null}
         </aside>
@@ -521,60 +520,20 @@ function Field({ label, value, onChange, size = "sm", multiline = false, childre
 
 /* ---------------- foto ---------------- */
 
-function PhotoPanel({ current, onPhoto }: { current: string; onPhoto: (url: string) => void }) {
-  const [choices, setChoices] = useState<ImageChoice[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/images")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { archive: ImageChoice[]; generated: ImageChoice[] } | null) => {
-        if (!cancelled && data) setChoices([...data.archive, ...data.generated]);
-      })
-      .catch(() => !cancelled && setChoices([]));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const isCurrent = (c: ImageChoice) => current === c.url || current === c.id || `/brand/${current}` === c.url;
-
+/**
+ * La stessa scelta del visual del passo 3, dentro l'editor: archivio,
+ * generati, e la generazione con lo stesso motore. E' un componente solo,
+ * cosi' un visual fatto qui ha la stessa provenienza, lo stesso freno
+ * giornaliero e lo stesso «salva» di uno fatto in composizione.
+ */
+function PhotoPanel({ current, format, onPhoto }: { current: string; format: FormatId; onPhoto: (url: string) => void }) {
   return (
     <>
-      <PanelTitle hint="Cambia la fotografia di questa variante. Il punto di fuoco si sposta sulla tela, trascinando il cerchio.">FOTO</PanelTitle>
-      {choices === null ? (
-        <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>
-          carico l&apos;archivio…
-        </p>
-      ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {choices.map((c) => {
-            const on = isCurrent(c);
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => onPhoto(c.url)}
-                aria-pressed={on}
-                title={c.label}
-                className="relative aspect-[4/3] cursor-pointer overflow-hidden rounded-[8px]"
-                style={{ border: `2px solid ${on ? "var(--color-rose)" : "var(--color-line)"}` }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.url} alt={c.label} className="h-full w-full object-cover" loading="lazy" />
-                {on ? (
-                  <span className="absolute right-1 bottom-1 flex h-[18px] w-[18px] items-center justify-center rounded-full" style={{ background: "var(--color-rose)", color: "#ffffff" }}>
-                    <Check size={11} strokeWidth={3} />
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      )}
-      <p className="text-[12px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
-        Per generare un visual nuovo torna al passo 3 della composizione.
-      </p>
+      <PanelTitle hint="Cambia la fotografia di questa variante, o generane una nuova. Il punto di fuoco si sposta sulla tela, trascinando il cerchio.">
+        FOTO
+      </PanelTitle>
+      {/* Togliere la selezione non ha senso qui: un asset ha sempre una foto. */}
+      <ImagePicker selectedId={null} selectedUrl={current} onSelect={(choice) => choice && onPhoto(choice.url)} purpose={format} compact />
     </>
   );
 }
