@@ -7,6 +7,7 @@ import {
   type RenderedAsset,
   type TemplateSpec,
 } from "@/lib/integrations/types";
+import { launchChromium } from "./chromium";
 import { Composition } from "./composition";
 
 /**
@@ -68,23 +69,6 @@ img{display:block;}
 </style></head><body>${body}</body></html>`;
 }
 
-async function launch() {
-  const [{ default: chromium }, puppeteer] = await Promise.all([
-    import("@sparticuz/chromium"),
-    import("puppeteer-core"),
-  ]);
-
-  // In locale si usa il Chrome installato; su Vercel il binario di
-  // @sparticuz/chromium, che e' compilato per quel runtime.
-  const local = process.env.CHROME_PATH;
-
-  return puppeteer.default.launch({
-    args: local ? [] : chromium.args,
-    executablePath: local ?? (await chromium.executablePath()),
-    headless: true,
-  });
-}
-
 export async function renderForPrint(
   spec: TemplateSpec,
   facts: CampaignFacts,
@@ -95,7 +79,7 @@ export async function renderForPrint(
   const size = FORMAT_SIZE[format];
   const html = await printablePage(spec, facts, format, baseUrl);
 
-  const browser = await launch();
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage();
 

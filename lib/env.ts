@@ -71,6 +71,13 @@ export const env = {
   get blobToken() {
     return read("BLOB_READ_WRITE_TOKEN");
   },
+  /**
+   * Il Chrome installato, per il poster e il video in locale. Su Vercel resta
+   * vuota: si usa il binario di @sparticuz/chromium.
+   */
+  get chromePath() {
+    return read("CHROME_PATH");
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },

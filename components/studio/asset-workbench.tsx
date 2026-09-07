@@ -19,6 +19,7 @@ import {
   Send,
   Share2,
   Type,
+  Video,
 } from "lucide-react";
 import { BRAND, FORMATS, type FormatId } from "@/lib/brand";
 import { DEFAULT_FONT, FONTS, FONT_IDS, fontFamilyFor } from "@/lib/fonts";
@@ -41,6 +42,7 @@ import type { Caption, Run, VariantCopy } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { AssetEditor } from "./asset-editor";
 import { ImagePicker } from "./image-picker";
+import { VideoExport } from "./video-export";
 
 interface Props {
   run: Run;
@@ -64,7 +66,7 @@ interface Props {
 }
 
 type Panel = "testo" | "foto" | "esporta" | "pubblica";
-type FileType = "png" | "pdf" | "svg" | "pptx";
+type FileType = "png" | "mp4" | "pdf" | "svg" | "pptx";
 
 /** Larghezza della tela per formato: il landscape ha bisogno di respiro. */
 const CANVAS_WIDTH: Record<FormatId, number> = {
@@ -78,9 +80,9 @@ const CANVAS_WIDTH: Record<FormatId, number> = {
  * L'editor a tutto schermo: la tela al centro, gli strumenti a sinistra, il
  * pannello a destra. Un solo posto per ritoccare, esportare e pubblicare.
  *
- * Quello che oggi parte davvero e' l'export PNG. PDF, SVG, PPTX e i canali
- * social sono al loro posto ma si dichiarano non ancora attivi: un bottone
- * che finge sarebbe peggio di un bottone che aspetta.
+ * Quello che oggi parte davvero e' l'export PNG e il video MP4. PDF, SVG,
+ * PPTX e i canali social sono al loro posto ma si dichiarano non ancora
+ * attivi: un bottone che finge sarebbe peggio di un bottone che aspetta.
  *
  * Il pannello Testo e' anche quello dello stile: carattere, fondo, corpo e
  * colore di ogni testo. Il Brand Kit resta il punto di partenza — ogni
@@ -542,6 +544,7 @@ function PhotoPanel({ current, format, onPhoto }: { current: string; format: For
 
 const FILE_TYPES: { id: FileType; label: string; hint: string; icon: typeof FileImage; ready: boolean }[] = [
   { id: "png", label: "PNG", hint: "alla dimensione esatta del formato", icon: FileImage, ready: true },
+  { id: "mp4", label: "MP4", hint: "video di 8 secondi: l'asset prende vita", icon: Video, ready: true },
   { id: "pdf", label: "PDF", hint: "per la stampa, 300 dpi", icon: FileText, ready: false },
   { id: "svg", label: "SVG", hint: "vettoriale, per l'agenzia", icon: Hash, ready: false },
   { id: "pptx", label: "PPTX", hint: "una slide per formato", icon: Presentation, ready: false },
@@ -614,7 +617,9 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
         Tutte le {run.variants.length} varianti
       </label>
 
-      {chosen.ready ? (
+      {chosen.id === "mp4" ? (
+        <VideoExport run={run} variants={variants} formats={formats} layouts={layouts} />
+      ) : chosen.ready ? (
         <div className="flex flex-col gap-1.5">
           <p className="tv-label">SCARICA</p>
           {variants.flatMap((v) =>

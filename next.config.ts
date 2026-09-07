@@ -12,10 +12,24 @@ const nextConfig: NextConfig = {
    * 1. il pacchetto non va inglobato dal bundler, o il binario viene spostato;
    * 2. i file di `bin/` vanno inclusi nel tracciamento, o non salgono proprio.
    */
-  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "ffmpeg-static"],
 
   outputFileTracingIncludes: {
     "/api/render/**": ["./node_modules/@sparticuz/chromium/bin/**"],
+    // Il video apre Chromium, lancia ffmpeg e legge font e musica dal disco:
+    // tutto va portato con la funzione, o in produzione manca in silenzio.
+    "/api/videos": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+      "./node_modules/ffmpeg-static/ffmpeg",
+      "./assets/fonts/**",
+      "./assets/audio/**",
+    ],
+    "/api/videos/**": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+      "./node_modules/ffmpeg-static/ffmpeg",
+      "./assets/fonts/**",
+      "./assets/audio/**",
+    ],
   },
 };
 

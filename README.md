@@ -41,8 +41,19 @@ Su un progetto Supabase nuovo, dal SQL Editor:
 
 1. `supabase/schema.sql` — tabelle, vincoli e RLS
 2. `supabase/seed.sql` — i sei strumenti, le campagne e i template base
+3. le migrazioni `supabase/migrations-00N-*.sql`, in ordine di numero
 
 Poi inserisci i profili del team in `profiles`, con ruolo `editor` oppure `approver`.
+
+## Video breve
+
+Dall'editor, pannello Esporta, voce MP4: l'asset prende vita per otto secondi
+(la foto scivola, il marchio appare, i testi entrano dall'alto verso il basso)
+in tutti e quattro i formati. Lo disegna lo stesso compositore del PNG, lo
+fotografa Chromium fotogramma per fotogramma e lo codifica ffmpeg in H.264.
+Il lavoro e' durevole (tabella `videos`, cron `/api/videos/drain`). La base
+musicale si mette in `assets/audio/brand-bed.mp3`: finche' manca, il video
+esce con audio silenzioso. In locale serve `CHROME_PATH`.
 
 ## I sei strumenti
 

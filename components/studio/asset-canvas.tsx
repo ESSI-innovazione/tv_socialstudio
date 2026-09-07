@@ -19,6 +19,10 @@ import type { VariantCopy } from "@/lib/types";
  * l'editor e il rendering server-side. Se preview ed export divergessero,
  * sarebbe perche' esistono due compositori: qui ce n'e' uno.
  *
+ * Ogni blocco porta `data-block-id` e `data-block-kind`: al PNG non servono
+ * (Satori li ignora), al video si': il CSS del reveal aggancia l'animazione
+ * a quegli attributi.
+ *
  * Il Brand Kit decide i colori di partenza. Chi impagina puo' cambiare il
  * fondo e il colore di ogni testo: la scelta sta nel layout, non qui, e
  * l'inchiostro di default si adatta da solo a un fondo chiaro o scuro.
@@ -167,6 +171,8 @@ function BlockView({
 
     return (
       <div
+        data-block-id={block.id}
+        data-block-kind={block.kind}
         style={{ position: "absolute", left, top, width, height, display: "flex", overflow: "hidden" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -204,7 +210,7 @@ function BlockView({
     // Il marchio non si ricolora: bianco su fondo scuro, vino su fondo chiaro.
     const ink = onDark ? "#ffffff" : BRAND.wine;
     return (
-      <div style={{ ...frame, width: "auto", alignItems: "center", gap: mark * 0.4 }}>
+      <div data-block-id={block.id} data-block-kind={block.kind} style={{ ...frame, width: "auto", alignItems: "center", gap: mark * 0.4 }}>
         <svg
           width={mark}
           height={mark * (108 / 105)}
@@ -233,7 +239,7 @@ function BlockView({
     if (!copy.badge) return null;
     const band = block.color ?? defaultTextColor("badge", onDark);
     return (
-      <div style={{ ...frame, width: "auto", maxWidth: width }}>
+      <div data-block-id={block.id} data-block-kind={block.kind} style={{ ...frame, width: "auto", maxWidth: width }}>
         <div
           style={{
             display: "flex",
@@ -260,7 +266,7 @@ function BlockView({
 
   if (block.kind === "cta") {
     return (
-      <div style={{ ...frame, flexDirection: "column", gap: Math.round(size * 0.35) }}>
+      <div data-block-id={block.id} data-block-kind={block.kind} style={{ ...frame, flexDirection: "column", gap: Math.round(size * 0.35) }}>
         <span
           style={{
             fontSize: size,
@@ -282,7 +288,7 @@ function BlockView({
   if (!text) return null;
 
   return (
-    <div style={{ ...frame, justifyContent: justify(block.align) }}>
+    <div data-block-id={block.id} data-block-kind={block.kind} style={{ ...frame, justifyContent: justify(block.align) }}>
       <span style={{ ...typeStyle(block, size, onDark), textAlign: block.align }}>
         {text}
       </span>
