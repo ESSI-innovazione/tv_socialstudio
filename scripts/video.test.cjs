@@ -39,7 +39,7 @@ for (const format of FORMAT_ORDER) {
   check(`${format}: altezza pari`, size.height % 2 === 0, size.height);
   check(`${format}: cattura alla misura del formato`, size.captureWidth > 0 && size.captureHeight > 0);
 }
-check("poster a scala doppia", videoSize("poster-a4").scale === 2 && videoSize("poster-a4").width === 1588 && videoSize("poster-a4").height === 2246);
+check("poster largo come una story, non di piu'", videoSize("poster-a4").width === 1080 && videoSize("poster-a4").height === 1526 && videoSize("poster-a4").scale < 1.4);
 check("linkedin perde il pixel dispari", videoSize("linkedin").width === 1200 && videoSize("linkedin").height === 626);
 check("story nativa", videoSize("ig-story").width === 1080 && videoSize("ig-story").height === 1920);
 

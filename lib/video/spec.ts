@@ -46,16 +46,22 @@ export interface VideoSize {
   height: number;
 }
 
+/** La larghezza a cui esce il poster: quella di una story, non di piu'. */
+const POSTER_VIDEO_WIDTH = 1080;
+
 /**
  * Le misure del video per formato.
  *
  * L'A4 e' disegnato a 794 px di larghezza, troppo poco per un video: si
- * cattura a scala doppia. Le dimensioni dispari (LinkedIn e' alto 627)
- * perdono un pixel: l'encoder non le accetta e nessuno lo nota.
+ * cattura in scala fino a 1080 px. Non di piu': a scala doppia (1588x2246)
+ * i 240 scatti con una fotografia dentro superavano i 300 secondi della
+ * funzione in produzione, e il lavoro moriva a meta'. Le dimensioni
+ * dispari (LinkedIn e' alto 627) perdono un pixel: l'encoder non le
+ * accetta e nessuno lo nota.
  */
 export function videoSize(format: FormatId): VideoSize {
   const spec = FORMATS[format];
-  const scale = format === "poster-a4" ? 2 : 1;
+  const scale = format === "poster-a4" ? POSTER_VIDEO_WIDTH / spec.width : 1;
   const even = (n: number) => Math.floor((n * scale) / 2) * 2;
   return {
     captureWidth: spec.width,
