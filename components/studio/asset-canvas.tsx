@@ -151,8 +151,10 @@ function BlockView({
     const sideBand = block.w < 0.99 && (block.h ?? 0) >= 0.9;
 
     // Il velo e' del colore del fondo: cosi' un asset blu ha una foto che
-    // vira al blu, e la scelta di un colore resta una scelta sola.
-    const v = (alpha: number) => rgba(ground.bg, alpha);
+    // vira al blu, e la scelta di un colore resta una scelta sola. La sua
+    // forza la decide chi impagina: a zero la foto resta nuda.
+    const strength = block.veil ?? 1;
+    const v = (alpha: number) => rgba(ground.bg, Math.round(alpha * strength * 1000) / 1000);
 
     // Testo su foto senza velo non regge il contrasto: il velo fa parte
     // dell'impianto, non e' un ritocco. Coordinate esplicite invece di inset,
@@ -160,7 +162,7 @@ function BlockView({
     const veil = fullBleed
       ? `linear-gradient(180deg, ${v(0.38)} 0%, ${v(0.86)} 56%, ${v(0.97)} 100%)`
       : sideBand
-        ? `linear-gradient(90deg, ${ground.bg} 0%, ${v(0.92)} 26%, ${v(0)} 100%)`
+        ? `linear-gradient(90deg, ${v(1)} 0%, ${v(0.92)} 26%, ${v(0)} 100%)`
         : generated
           // Un blocco piccolo non regge il velo pieno, ma un visual generato
           // non puo' restare senza: la sua palette non e' garantita. Una
@@ -168,6 +170,7 @@ function BlockView({
           // coprire il soggetto.
           ? `linear-gradient(180deg, ${v(0.2)} 0%, ${v(0.2)} 100%)`
           : null;
+    const showVeil = veil !== null && strength > 0;
 
     return (
       <div
@@ -188,8 +191,9 @@ function BlockView({
             objectPosition: `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%`,
           }}
         />
-        {veil ? (
+        {showVeil ? (
           <div
+            data-veil
             style={{
               position: "absolute",
               left: 0,

@@ -17,11 +17,11 @@ import type { VariantCopy } from "./types";
  * Tre posti dove puo' stare la riga, in ordine di preferenza:
  *
  *  - Supabase, se configurato: la tabella `videos`.
- *  - lo store dei file (Vercel Blob), se c'e' quello ma non il database:
- *    un JSON per lavoro piu' un indice. Esiste perche' in produzione la
- *    memoria non regge: la richiesta che crea il lavoro e quella che ne
- *    chiede lo stato possono atterrare su due istanze diverse, e la seconda
- *    risponderebbe "video sconosciuto" a un video che sta uscendo.
+ *  - lo store dei file (Vercel Blob), se c'e' quello ma non il database.
+ *    Esiste perche' in produzione la memoria non regge: la richiesta che
+ *    crea il lavoro e quella che ne chiede lo stato possono atterrare su
+ *    due istanze diverse, e la seconda risponderebbe "video sconosciuto"
+ *    a un video che sta uscendo.
  *  - la memoria del processo, solo in locale senza credenziali.
  */
 
@@ -74,6 +74,7 @@ interface Backend {
   byRun(runId: string, limit: number): Promise<VideoJob[]>;
   inFlight(): Promise<number>;
   startedSince(iso: string): Promise<number>;
+  reset(): Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,6 +166,10 @@ const supabaseBackend: Backend = {
     }
     return count ?? 0;
   },
+
+  async reset() {
+    // Il database non si svuota dai test.
+  },
 };
 
 /* ------------------------------------------------------------------ */
@@ -208,104 +213,165 @@ const memoryBackend: Backend = {
   async startedSince(iso) {
     return [...memory().values()].filter((j) => j.created_at >= iso).length;
   },
+  async reset() {
+    memory().clear();
+  },
 };
 
 /* ------------------------------------------------------------------ */
 /* Lo store dei file                                                    */
 /* ------------------------------------------------------------------ */
 
-const JOB_PREFIX = "video/jobs/";
-const INDEX_PATH = "video/jobs/index.json";
-/** Quanti lavori ricorda l'indice. Bastano per i freni e per la console. */
-const INDEX_SIZE = 200;
+/**
+ * Ogni cambio di stato e' un file nuovo, mai una sovrascrittura.
+ *
+ * La prima versione riscriveva un JSON per lavoro piu' un indice, e in
+ * produzione il freno di concorrenza ha rifiutato video per un lavoro che
+ * era finito da minuti: la CDN di Vercel Blob serve un file sovrascritto
+ * nella versione vecchia anche per un minuto. Un poll ogni tre secondi
+ * non puo' conviverci.
+ *
+ * Quindi: `video/jobs/{id}/{istante}~{stato}~{esecuzione}.json`. Il nome
+ * porta cio' che serve a elencare e contare senza aprire il file, l'elenco
+ * arriva dall'API (sempre aggiornato), e il contenuto si legge solo per
+ * l'ultima versione, che non cambia mai piu'.
+ */
 
-/** Il poco che serve a elencare senza aprire ogni lavoro. */
-type IndexEntry = Pick<VideoJob, "id" | "run_id" | "status" | "created_at">;
+const JOB_PREFIX = "video/jobs/";
+
+interface Version {
+  id: string;
+  path: string;
+  /** Millisecondi, con zeri davanti: l'ordine alfabetico e' quello temporale. */
+  stamp: string;
+  status: VideoStatus;
+  run_id: string | null;
+}
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-async function readJson<T>(path: string): Promise<T | null> {
-  const file = await objectStore().get(path);
+function stampOf(iso: string): string {
+  return String(Date.parse(iso)).padStart(15, "0");
+}
+
+function versionPath(job: VideoJob): string {
+  const run = job.run_id ? encodeURIComponent(job.run_id) : "";
+  return `${JOB_PREFIX}${job.id}/${stampOf(job.updated_at)}~${job.status}~${run}.json`;
+}
+
+function parseVersion(path: string): Version | null {
+  const match = /^video\/jobs\/([^/]+)\/(\d+)~([a-z]+)~([^/]*)\.json$/.exec(path);
+  if (!match) return null;
+  const [, id, stamp, status, run] = match;
+  if (!(OPEN as string[]).includes(status) && status !== "ready" && status !== "failed") return null;
+  return {
+    id,
+    path,
+    stamp,
+    status: status as VideoStatus,
+    run_id: run ? decodeURIComponent(run) : null,
+  };
+}
+
+/** Per ogni lavoro, la sua storia dal piu' vecchio al piu' recente. */
+async function histories(prefix = JOB_PREFIX): Promise<Map<string, Version[]>> {
+  const paths = await objectStore().list(prefix);
+  const byId = new Map<string, Version[]>();
+  for (const path of paths) {
+    const v = parseVersion(path);
+    if (!v) continue;
+    const list = byId.get(v.id) ?? [];
+    list.push(v);
+    byId.set(v.id, list);
+  }
+  for (const list of byId.values()) list.sort((a, b) => a.stamp.localeCompare(b.stamp));
+  return byId;
+}
+
+async function latest(id: string): Promise<Version | null> {
+  const history = (await histories(`${JOB_PREFIX}${id}/`)).get(id);
+  return history?.[history.length - 1] ?? null;
+}
+
+async function readVersion(v: Version): Promise<VideoJob | null> {
+  const file = await objectStore().get(v.path);
   if (!file) return null;
   try {
-    return JSON.parse(decoder.decode(file.data)) as T;
+    return JSON.parse(decoder.decode(file.data)) as VideoJob;
   } catch {
     return null;
   }
 }
 
-async function writeJson(path: string, value: unknown): Promise<void> {
-  await objectStore().put(path, encoder.encode(JSON.stringify(value)), "application/json");
+async function writeVersion(job: VideoJob): Promise<void> {
+  await objectStore().put(versionPath(job), encoder.encode(JSON.stringify(job)), "application/json");
 }
 
-async function readIndex(): Promise<IndexEntry[]> {
-  return (await readJson<IndexEntry[]>(INDEX_PATH)) ?? [];
-}
-
-/**
- * Aggiorna l'indice. Due istanze che scrivono nello stesso istante possono
- * perdersi una voce a vicenda: il lavoro resta comunque nel suo file, e al
- * massimo sparisce dall'elenco. Per uno strumento interno e' un rischio
- * che vale la semplicita' di non avere una coda.
- */
-async function indexJob(job: VideoJob): Promise<void> {
-  const entry: IndexEntry = {
-    id: job.id,
-    run_id: job.run_id,
-    status: job.status,
-    created_at: job.created_at,
-  };
-  const rest = (await readIndex()).filter((e) => e.id !== job.id);
-  const next = [entry, ...rest]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, INDEX_SIZE);
-  await writeJson(INDEX_PATH, next);
-}
-
-async function loadMany(entries: IndexEntry[]): Promise<VideoJob[]> {
-  const jobs = await Promise.all(entries.map((e) => readJson<VideoJob>(`${JOB_PREFIX}${e.id}.json`)));
+async function readLatestMany(versions: Version[]): Promise<VideoJob[]> {
+  const jobs = await Promise.all(versions.map(readVersion));
   return jobs.filter((j): j is VideoJob => j !== null);
+}
+
+/** L'ultima versione di ogni lavoro, con l'istante di nascita. */
+function heads(byId: Map<string, Version[]>): { head: Version; born: string }[] {
+  return [...byId.values()].map((history) => ({
+    head: history[history.length - 1],
+    born: history[0].stamp,
+  }));
 }
 
 const storeBackend: Backend = {
   async create(job) {
-    await writeJson(`${JOB_PREFIX}${job.id}.json`, job);
-    await indexJob(job);
+    await writeVersion(job);
     return job;
   },
 
   async update(id, patch) {
-    const current = await readJson<VideoJob>(`${JOB_PREFIX}${id}.json`);
+    const head = await latest(id);
+    if (!head) return;
+    const current = await readVersion(head);
     if (!current) return;
     const next = { ...current, ...patch };
-    await writeJson(`${JOB_PREFIX}${id}.json`, next);
-    if (patch.status && patch.status !== current.status) await indexJob(next);
+    // Due scritture nello stesso millisecondo darebbero lo stesso nome.
+    if (stampOf(next.updated_at) <= head.stamp) {
+      next.updated_at = new Date(Number(head.stamp) + 1).toISOString();
+    }
+    await writeVersion(next);
   },
 
   async get(id) {
-    return readJson<VideoJob>(`${JOB_PREFIX}${id}.json`);
+    const head = await latest(id);
+    return head ? readVersion(head) : null;
   },
 
   async open(limit) {
-    const entries = (await readIndex())
-      .filter((e) => OPEN.includes(e.status))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const chosen = heads(await histories())
+      .filter(({ head }) => OPEN.includes(head.status))
+      .sort((a, b) => a.born.localeCompare(b.born))
       .slice(0, limit);
-    return loadMany(entries);
+    return readLatestMany(chosen.map((c) => c.head));
   },
 
   async byRun(runId, limit) {
-    const entries = (await readIndex()).filter((e) => e.run_id === runId).slice(0, limit);
-    return loadMany(entries);
+    const chosen = heads(await histories())
+      .filter(({ head }) => head.run_id === runId)
+      .sort((a, b) => b.born.localeCompare(a.born))
+      .slice(0, limit);
+    return readLatestMany(chosen.map((c) => c.head));
   },
 
   async inFlight() {
-    return (await readIndex()).filter((e) => OPEN.includes(e.status)).length;
+    return heads(await histories()).filter(({ head }) => OPEN.includes(head.status)).length;
   },
 
   async startedSince(iso) {
-    return (await readIndex()).filter((e) => e.created_at >= iso).length;
+    const since = stampOf(iso);
+    return heads(await histories()).filter(({ born }) => born >= since).length;
+  },
+
+  async reset() {
+    for (const path of await objectStore().list(JOB_PREFIX)) await objectStore().remove(path);
   },
 };
 
@@ -375,7 +441,7 @@ export async function listByRun(runId: string, limit = 40): Promise<VideoJob[]> 
   return backend().byRun(runId, limit);
 }
 
-/** Quanti rendering sono in volo adesso. Serve al limite di concorrenza. */
+/** Quanti lavori risultano aperti. Il freno usa `activeCount`, che scarta gli stantii. */
 export async function inFlightCount(): Promise<number> {
   return backend().inFlight();
 }
@@ -386,8 +452,7 @@ export async function startedLastDay(): Promise<number> {
   return backend().startedSince(since);
 }
 
-/** Svuota la memoria e l'indice dello store. Serve ai test. */
+/** Svuota il backend corrente. Serve ai test. */
 export async function resetVideoStore(): Promise<void> {
-  memory().clear();
-  if (backend() === storeBackend) await writeJson(INDEX_PATH, []);
+  await backend().reset();
 }

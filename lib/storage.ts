@@ -22,8 +22,21 @@ export interface ObjectStore {
   kind: "supabase" | "blob" | "memory";
   put(path: string, data: Uint8Array, contentType: string): Promise<StoredObject>;
   get(path: string): Promise<{ data: Uint8Array; contentType: string } | null>;
+  /** I percorsi che iniziano per `prefix`. Legge dall'API, non dalla CDN: e' sempre aggiornato. */
+  list(prefix: string): Promise<string[]>;
+  remove(path: string): Promise<void>;
   urlFor(path: string): string;
 }
+
+/**
+ * Attenzione a sovrascrivere.
+ *
+ * Su Vercel Blob un file riscritto allo stesso percorso puo' tornare dalla
+ * CDN nella versione vecchia per un minuto buono. Un file di stato che
+ * cambia ogni pochi secondi non puo' vivere cosi': chi ha bisogno di
+ * rileggere subito cio' che ha scritto usa percorsi nuovi e `list`, mai
+ * `put` sullo stesso nome.
+ */
 
 const BUCKET = "documents";
 
@@ -67,6 +80,27 @@ const supabaseStore: ObjectStore = {
     };
   },
 
+  // Supabase Storage elenca per cartella: il prefisso si spezza in cartella
+  // e inizio del nome, e si scende di un livello solo.
+  async list(prefix) {
+    const supabase = db()!;
+    const cut = prefix.lastIndexOf("/");
+    const folder = cut >= 0 ? prefix.slice(0, cut) : "";
+    const start = cut >= 0 ? prefix.slice(cut + 1) : prefix;
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .list(folder, { limit: 1000, search: start });
+    if (error || !data) return [];
+    return data
+      .filter((item) => item.name.startsWith(start))
+      .map((item) => (folder ? `${folder}/${item.name}` : item.name));
+  },
+
+  async remove(path) {
+    const supabase = db()!;
+    await supabase.storage.from(BUCKET).remove([path]);
+  },
+
   urlFor(path) {
     // Serviamo sempre attraverso una nostra rotta, mai un indirizzo di terzi:
     // cosi' l'accesso resta dietro l'autenticazione dell'app.
@@ -94,6 +128,14 @@ const memoryStore: ObjectStore = {
 
   async get(path) {
     return globalStore.__tvFiles?.get(path) ?? null;
+  },
+
+  async list(prefix) {
+    return [...(globalStore.__tvFiles?.keys() ?? [])].filter((p) => p.startsWith(prefix)).sort();
+  },
+
+  async remove(path) {
+    globalStore.__tvFiles?.delete(path);
   },
 
   urlFor(path) {
@@ -150,6 +192,23 @@ const blobStore: ObjectStore = {
     } catch {
       return null;
     }
+  },
+
+  async list(prefix) {
+    const { list } = await import("@vercel/blob");
+    const paths: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await list({ prefix, cursor, limit: 1000, token: env.blobToken! });
+      paths.push(...page.blobs.map((b) => b.pathname));
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    return paths.sort();
+  },
+
+  async remove(path) {
+    const { del } = await import("@vercel/blob");
+    await del(path, { token: env.blobToken! });
   },
 
   urlFor(path) {

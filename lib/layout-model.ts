@@ -51,6 +51,11 @@ export interface Block {
   align?: "left" | "center" | "right";
   /** Punto d'interesse dell'immagine, in frazione: decide cosa sopravvive al taglio. */
   focal?: { x: number; y: number };
+  /**
+   * Quanto pesa il velo colorato sull'immagine, 0..1. Assente vale 1, il velo
+   * dell'impianto; 0 lascia la foto nuda. Solo sui blocchi immagine.
+   */
+  veil?: number;
   visible: boolean;
   /** Un blocco bloccato non si sposta: il marchio, per esempio. */
   locked?: boolean;
@@ -170,6 +175,16 @@ export function snap(format: FormatId, x: number, y: number): { x: number; y: nu
  * errore da segnalare dopo: e' una posizione che non deve poter esistere.
  */
 export function clampBlock(format: FormatId, block: Block): Block {
+  // L'immagine puo' stare a pieno formato: il margine di sicurezza vale per
+  // il testo, non per il fondo fotografico. Senza questa eccezione un
+  // qualunque ritocco — il punto di fuoco, il velo — stringeva la foto dentro
+  // i margini e le toglieva il velo, perche' non era piu' a pieno formato.
+  if (block.kind === "image") {
+    const w = clamp(block.w, 0.08, 1);
+    const h = clamp(block.h ?? 0.25, 0.05, 1);
+    return { ...block, w, h, x: clamp(block.x, 0, 1 - w), y: clamp(block.y, 0, 1 - h) };
+  }
+
   const inset = safeInset(format);
   const maxW = 1 - inset.x * 2;
 
@@ -675,23 +690,14 @@ export function decodeLayout(raw: string | null | undefined, format: FormatId): 
       }
     }
     if (b.locked === true) block.locked = true;
+    if (kind === "image" && typeof b.veil === "number" && Number.isFinite(b.veil)) {
+      block.veil = clamp(b.veil, 0, 1);
+    }
     if (typeof b.color === "string") {
       const hex = normalizeHex(b.color);
       if (hex) block.color = hex;
     }
-    // L'immagine puo' stare a pieno formato, fuori dal margine di sicurezza:
-    // per lei basta restare dentro l'artboard. Il testo no.
-    blocks.push(
-      kind === "image"
-        ? {
-            ...block,
-            x: clamp(block.x, 0, 1),
-            y: clamp(block.y, 0, 1),
-            w: clamp(block.w, 0, 1),
-            ...(block.h === undefined ? {} : { h: clamp(block.h, 0, 1) }),
-          }
-        : clampBlock(format, block),
-    );
+    blocks.push(clampBlock(format, block));
   }
 
   let layout: AssetLayout = { format, blocks };

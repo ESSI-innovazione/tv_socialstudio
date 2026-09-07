@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="TV Social Studio">
+  <defs>
+    <radialGradient id="glow" cx="0.86" cy="0.12" r="0.75">
+      <stop offset="0" stop-color="#ff7f51" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#ff7f51" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ff7f51" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="depth" cx="0.5" cy="0.5" r="0.72">
+      <stop offset="0" stop-color="#8a0730"/>
+      <stop offset="1" stop-color="#5c001e"/>
+    </radialGradient>
+  </defs>
+  <!-- fondo vino, con la stessa luce corallo della card di accesso -->
+  <rect width="1024" height="1024" fill="url(#depth)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <!-- il marchio Time Vision, bianco, centrato: sta dentro il cerchio che Vercel ritaglia -->
+  <g transform="translate(212 203.5) scale(5.7143)">
+    <path fill="#ffffff" d="M52.44,1.18a52.44,52.44,0,1,0,52.44,52.44A52.44,52.44,0,0,0,52.44,1.18m6.07,92.48v-34h14V47.55H46.37V93.66a40.49,40.49,0,1,1,12.14,0"/>
+  </g>
+</svg>

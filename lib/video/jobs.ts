@@ -1,8 +1,8 @@
 import {
   createJob,
   getJob,
-  inFlightCount,
   listByRun,
+  openJobs,
   startedLastDay,
   updateJob,
   type VideoJob,
@@ -36,9 +36,19 @@ export interface RenderedVideo {
 
 export type VideoRenderer = (job: VideoJob, baseUrl: string) => Promise<RenderedVideo>;
 
+/**
+ * Quanti rendering occupano davvero una funzione adesso. Un lavoro stantio
+ * non ne occupa nessuna: contarlo bloccherebbe tutti finche' il cron non
+ * lo riprende, ed e' successo.
+ */
+export async function activeCount(now = Date.now()): Promise<number> {
+  const open = await openJobs(LIMITS.concurrency + 10);
+  return open.filter((job) => !isStale(job, now)).length;
+}
+
 async function assertWithinLimits(): Promise<void> {
-  const [inFlight, today] = await Promise.all([inFlightCount(), startedLastDay()]);
-  if (inFlight >= LIMITS.concurrency) throw new VideoLimitError("concurrency", LIMITS.concurrency);
+  const [active, today] = await Promise.all([activeCount(), startedLastDay()]);
+  if (active >= LIMITS.concurrency) throw new VideoLimitError("concurrency", LIMITS.concurrency);
   if (today >= LIMITS.perDay) throw new VideoLimitError("daily", LIMITS.perDay);
 }
 

@@ -363,11 +363,48 @@ export function AssetEditor({
                   </div>
                 </>
               ) : (
-                <p className="text-[11.5px] leading-[1.5]" style={{ color: "var(--color-ink-soft)" }}>
-                  Trascina il cerchio sull&apos;immagine per scegliere il punto che deve restare
-                  visibile quando lo stesso visual passa al quadrato e alla story.
-                </p>
+                <>
+                  {/* Il velo fa parte dell'impianto, ma quanto pesa lo decide chi guarda la foto. */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11.5px]" style={{ color: "var(--color-ink-soft)" }}>
+                      Velo
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={Math.round((selected.veil ?? 1) * 100)}
+                      onChange={(e) => onChange(updateBlock(layout, selected.id, { veil: Number(e.target.value) / 100 }))}
+                      aria-label="Forza del velo sull'immagine"
+                      className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[#ce4257]"
+                    />
+                    <span className="tv-mono w-[40px] text-right text-[11.5px]" style={{ color: "var(--color-ink)" }}>
+                      {Math.round((selected.veil ?? 1) * 100)}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
+                    Il velo prende il colore del fondo e regge il contrasto del testo: a zero la foto
+                    resta com&apos;e&apos;.
+                  </p>
+                  <p className="text-[11.5px] leading-[1.5]" style={{ color: "var(--color-ink-soft)" }}>
+                    Trascina il cerchio sull&apos;immagine per scegliere il punto che deve restare
+                    visibile quando lo stesso visual passa al quadrato e alla story.
+                  </p>
+                </>
               )}
+
+              {selected.kind === "logo" ? (
+                <label className="flex cursor-pointer items-center gap-2 text-[11.5px]" style={{ color: "var(--color-ink)" }}>
+                  <input
+                    type="checkbox"
+                    checked={selected.visible}
+                    onChange={(e) => onChange(updateBlock(layout, selected.id, { visible: e.target.checked }))}
+                    className="h-4 w-4 accent-[#ce4257]"
+                  />
+                  Usa il marchio su questo asset
+                </label>
+              ) : null}
 
               {selected.locked ? (
                 <p
@@ -375,7 +412,7 @@ export function AssetEditor({
                   style={{ color: "var(--color-ink-faint)" }}
                 >
                   <Lock size={12} strokeWidth={2} />
-                  Il marchio non si sposta: lo decide il Brand Kit.
+                  Il marchio non si sposta: lo decide il Brand Kit. Puoi toglierlo, o cambiarne il corpo.
                 </p>
               ) : null}
             </div>

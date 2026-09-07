@@ -13,7 +13,7 @@
 const base = "../.tmp-test";
 const { videoSize, DURATION_MS, FPS, LIMITS, MAX_ATTEMPTS, STALE_RENDERING_MS, STALE_PENDING_MS } = require(`${base}/video/spec.js`);
 const { buildTimeline, entranceEnd, frameTime, frameCount } = require(`${base}/video/timeline.js`);
-const { startVideo, advance, isStale, videoPath, toVideoView } = require(`${base}/video/jobs.js`);
+const { startVideo, advance, isStale, videoPath, toVideoView, videosForRun } = require(`${base}/video/jobs.js`);
 const { VideoLimitError } = require(`${base}/video/errors.js`);
 const { getJob, updateJob, resetVideoStore, forceStoreBackend, videosAreDurable } = require(`${base}/db-videos.js`);
 const { objectStore } = require(`${base}/storage.js`);
@@ -144,7 +144,6 @@ async function jobSuite(mode) {
 
     check(tag("ready e' terminale"), (await advance(job.id, render, "http://x", { force: true })).status === "ready" && calls === 1);
 
-    const { videosForRun } = require(`${base}/video/jobs.js`);
     const listed = await videosForRun("run-1");
     check(tag("l'elenco per esecuzione lo ritrova"), listed.length === 1 && listed[0].id === job.id && listed[0].status === "ready");
     check(tag("un'altra esecuzione non lo vede"), (await videosForRun("run-2")).length === 0);
@@ -202,6 +201,23 @@ async function jobSuite(mode) {
     check(tag("un pending dimenticato riparte dal poll"), taken.status === "ready");
   }
 
+  // Un lavoro stantio non occupa il freno.
+  {
+    await resetVideoStore();
+    const longAgo = new Date(Date.now() - STALE_RENDERING_MS - 1000).toISOString();
+    for (let i = 0; i < LIMITS.concurrency; i++) {
+      const j = await startVideo(request, {});
+      await updateJob(j.id, { status: "rendering", attempts: 1, started_at: longAgo });
+    }
+    let started = null;
+    try {
+      started = await startVideo(request, {});
+    } catch (error) {
+      check(tag("i lavori stantii non contano nel freno"), false, error.message);
+    }
+    check(tag("i lavori stantii non contano nel freno"), started !== null && started.status === "pending");
+  }
+
   // Freni.
   {
     await resetVideoStore();
@@ -240,10 +256,14 @@ async function jobSuite(mode) {
     // Lo store e' la sola verita': una riga scritta qui si legge da un'altra "istanza".
     await resetVideoStore();
     const job = await startVideo(request, { runId: "run-9" });
-    const raw = await objectStore().get(`video/jobs/${job.id}.json`);
-    check("[store] il lavoro e' un file JSON", raw !== null && raw.contentType === "application/json");
-    const index = JSON.parse(new TextDecoder().decode((await objectStore().get("video/jobs/index.json")).data));
-    check("[store] l'indice lo conosce", index.some((e) => e.id === job.id && e.run_id === "run-9" && e.status === "pending"));
+    const v1 = await objectStore().list(`video/jobs/${job.id}/`);
+    check("[store] il lavoro e' un file JSON con lo stato nel nome", v1.length === 1 && v1[0].includes("~pending~"));
+    await updateJob(job.id, { status: "rendering", attempts: 1, started_at: new Date().toISOString() });
+    const v2 = await objectStore().list(`video/jobs/${job.id}/`);
+    check("[store] un cambio di stato e' un file nuovo, mai una sovrascrittura", v2.length === 2 && v2.some((p) => p.includes("~rendering~")) && v2.every((p) => p !== v1[0] || p === v1[0]));
+    check("[store] il primo file resta com'era", v2.includes(v1[0]));
+    check("[store] la lettura prende l'ultima versione", (await getJob(job.id)).status === "rendering");
+    check("[store] l'elenco per esecuzione lo trova senza indice", (await videosForRun("run-9")).some((j) => j.id === job.id));
   }
   forceStoreBackend(false);
 

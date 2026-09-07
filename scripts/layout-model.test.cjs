@@ -132,5 +132,19 @@ check("un passo fuori scala viene riportato in scala", tamed && tamed.blocks[0].
 check("un colore che non e' un colore sparisce", tamed && !("color" in tamed.blocks[0]));
 check("un font sconosciuto e un fondo non valido spariscono", tamed && !("style" in tamed));
 
+const veiled = updateBlock(coloured, "image", { veil: 0.35 });
+const veiledBack = decodeLayout(decodeURIComponent(encodeLayout(veiled)), "linkedin");
+check("il velo dell'immagine sopravvive al viaggio nell'URL", veiledBack && veiledBack.blocks.find((b) => b.kind === "image").veil === 0.35);
+const overVeil = decodeLayout(JSON.stringify({ format: "linkedin", blocks: [{ id: "image", kind: "image", x: 0, y: 0, w: 1, h: 1, veil: 7 }, { id: "headline", kind: "headline", x: 0.1, y: 0.1, w: 0.5, veil: 0.5 }] }), "linkedin");
+check("un velo oltre 1 viene riportato a 1", overVeil && overVeil.blocks[0].veil === 1);
+check("il velo non esiste sui blocchi di testo", overVeil && !("veil" in overVeil.blocks[1]));
+
+// Un ritocco a una foto a pieno formato non deve stringerla dentro i margini.
+const full = defaultLayout("ig-story", "foto-a-tutta-pagina");
+const touched = updateBlock(full, "image", { veil: 0.5 }).blocks.find((b) => b.kind === "image");
+check("la foto a pieno formato resta a pieno formato dopo un ritocco", touched.x === 0 && touched.y === 0 && touched.w === 1 && touched.h === 1, JSON.stringify(touched));
+const pushed = clampBlock("ig-story", { ...touched, x: 0.4, y: -0.3, w: 1.5, h: 2 });
+check("ma non esce dall'artboard", pushed.x === 0 && pushed.y === 0 && pushed.w === 1 && pushed.h === 1, JSON.stringify(pushed));
+
 console.log(`\n${pass} verifiche passate, ${fail} fallite`);
 process.exit(fail === 0 ? 0 : 1);
