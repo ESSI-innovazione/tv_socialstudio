@@ -1,156 +1,172 @@
-import Image from "next/image";
-import { Box, Play } from "lucide-react";
-import DynamicHero from "@/components/ui/dynamic-hero";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Box, Send, Shapes } from "lucide-react";
+import ParallaxUnfurlingGallery from "@/components/ui/3d-parallax-unfurling-gallery";
+import { LogoMark } from "@/components/studio/logo";
+import { auth, signIn } from "@/auth";
+import { ALLOWED_EMAIL_DOMAIN, authConfigured } from "@/lib/env";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+/**
+ * La porta dello Studio. Dietro, il muro dei visual Time Vision si apre da
+ * solo: quello che il team produce qui dentro, gia' in brand. Davanti, una
+ * sola cosa da fare — entrare con l'indirizzo aziendale.
+ */
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  if (authConfigured) {
+    const session = await auth();
+    if (session?.user?.email?.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
+      redirect("/studio");
+    }
+  }
+
+  const { error } = await searchParams;
+
   return (
-    <DynamicHero
-      nav={[
-        { label: "Home", href: "/" },
-        { label: "Come funziona", href: "#come-funziona" },
-        { label: "Template", href: "/studio" },
-        { label: "Brand Kit", href: "/studio" },
-        { label: "Accedi", href: "/studio", emphasis: true },
-      ]}
-      status={
-        <div className="tv-pill h-8 gap-2 border border-wine-edge bg-wine-tint px-3.5">
-          <span className="size-1.5 rounded-full bg-success" />
-          <span className="text-xs font-medium text-ink-soft">Figma Pro connesso</span>
+    <ParallaxUnfurlingGallery mode="auto">
+      <div className="relative flex h-full w-full items-center justify-center px-5 py-8">
+        <div className="tv-anim-rise w-[min(92vw,432px)] overflow-hidden rounded-[20px] border border-white/12 bg-paper shadow-[0_50px_110px_-30px_rgba(0,0,0,.75)]">
+          {/* Il cappello vino: marchio, promessa, tono. */}
+          <div className="relative overflow-hidden bg-wine px-7 pb-6 pt-7">
+            <div className="pointer-events-none absolute -right-24 -top-28 size-72 rounded-full bg-[radial-gradient(circle,rgba(255,127,81,.42)_0%,rgba(255,127,81,0)_72%)]" />
+
+            <div className="relative flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-white/12">
+                <LogoMark size={22} color="#ffffff" />
+              </span>
+              <span className="flex flex-col leading-none">
+                <span className="text-[15px] font-extrabold tracking-[-0.01em] text-white">
+                  Time Vision
+                </span>
+                <span className="mt-[4px] text-[9px] font-semibold uppercase tracking-[0.16em] text-on-wine">
+                  Marketing Studio
+                </span>
+              </span>
+            </div>
+
+            <h1 className="relative mt-6 text-[23px] font-bold leading-[1.18] tracking-[-0.015em] text-white">
+              Dal brief al post <span className="text-apricot">pubblicato</span>.
+            </h1>
+            <p className="relative mt-2.5 text-[13px] leading-[1.5] text-on-wine">
+              La piattaforma del team marketing: template Figma del brand, poster, cataloghi,
+              visual 3D e post social, generati e approvati in un posto solo.
+            </p>
+          </div>
+
+          {/* Il corpo chiaro: una sola azione. */}
+          <div className="px-7 pb-7 pt-6">
+            <div className="tv-label">ACCESSO RISERVATO</div>
+
+            {error ? (
+              <p className="mt-3 rounded-lg border border-warm-edge bg-warning-bg px-3 py-2.5 text-[12px] font-medium leading-[1.45] text-warning">
+                {errorMessage(error)}
+              </p>
+            ) : null}
+
+            {authConfigured ? (
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("google", { redirectTo: "/studio" });
+                }}
+              >
+                <button type="submit" className={ctaClass}>
+                  <span className="flex size-6 items-center justify-center rounded-full bg-white">
+                    <GoogleGlyph />
+                  </span>
+                  Entra con Google
+                </button>
+              </form>
+            ) : (
+              <>
+                <Link href="/studio" className={ctaClass}>
+                  <span className="flex size-6 items-center justify-center rounded-full bg-white/90 text-[11px] font-extrabold text-wine">
+                    TV
+                  </span>
+                  Entra nello Studio
+                </Link>
+                <p className="mt-2.5 text-center text-[11px] font-medium text-ink-faint">
+                  Google non e&apos; ancora configurato: accesso in modalita&apos; demo.
+                </p>
+              </>
+            )}
+
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-[11.5px] font-medium text-ink-faint">
+              <span className="size-1.5 rounded-full bg-success" />
+              Solo indirizzi <span className="tv-mono text-ink-soft">@{ALLOWED_EMAIL_DOMAIN}</span>
+            </p>
+
+            <div className="mt-6 grid gap-3 border-t border-line pt-5">
+              <Feature icon={<Shapes size={15} strokeWidth={1.9} />}>
+                Template Figma del brand, sempre sincronizzati
+              </Feature>
+              <Feature icon={<Box size={15} strokeWidth={1.9} />}>
+                Poster, cataloghi A4 e visual 3D in quattro varianti
+              </Feature>
+              <Feature icon={<Send size={15} strokeWidth={1.9} />}>
+                LinkedIn e Instagram, dal brief alla pubblicazione
+              </Feature>
+            </div>
+          </div>
         </div>
-      }
-      eyebrow={
-        <div className="tv-pill h-[30px] gap-2.5 border border-warm-edge bg-warm-tint px-3.5">
-          <span className="text-[11px] font-bold tracking-[0.1em] text-rose">AGENTE CREATIVO</span>
-          <span className="size-[3px] rounded-full bg-warm-edge" />
-          <span className="text-xs font-medium text-warning">uso interno · team marketing</span>
-        </div>
-      }
-      headline={
-        <>
-          Dal brief al post <span className="font-bold text-wine">pubblicato</span>.
-        </>
-      }
-      tagline="Una sola pagina: scrivi l'istruzione e l'agente apre i template Figma del brand, costruisce poster, cataloghi, visual 3D e i post per LinkedIn e Instagram."
-      ctaLabel="Entra nello Studio"
-      ctaHref="/studio"
-      media={<HeroMedia />}
-    />
+
+        <p className="absolute inset-x-0 bottom-5 text-center text-[11px] font-medium text-on-wine-faint/80">
+          Uso interno &middot; Time Vision &middot; timevision.it
+        </p>
+      </div>
+    </ParallaxUnfurlingGallery>
   );
 }
 
-/** Il collage di anteprime dentro la card arrotondata. */
-function HeroMedia() {
+const ctaClass =
+  "mt-3.5 flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-wine text-[14px] font-semibold text-white shadow-[0_14px_30px_-14px_rgba(114,0,38,.85)] transition-colors hover:bg-[#8a0730] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose";
+
+function Feature({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <>
-      {/* Prima colonna: la card ruotata, la firma del collage. */}
-      <div className="hidden w-[128px] shrink-0 -translate-y-1.5 -rotate-3 flex-col overflow-hidden rounded-[9px] bg-wine shadow-[0_18px_34px_-18px_rgba(114,0,38,.55)] md:flex">
-        <div className="relative h-[150px]">
-          <Image
-            src="/brand/tv-aula.jpg"
-            alt=""
-            fill
-            sizes="128px"
-            className="object-cover"
-            priority
-          />
-        </div>
-        <div className="flex flex-1 flex-col justify-between p-2.5">
-          <div className="text-[11px] font-bold leading-tight text-white">Master Academy 2026</div>
-          <div className="h-[5px] w-[42px] rounded-full bg-coral" />
-        </div>
-      </div>
+    <div className="flex items-center gap-2.5">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-wine-tint text-rose">
+        {icon}
+      </span>
+      <span className="text-[12.5px] leading-[1.35] text-ink-soft">{children}</span>
+    </div>
+  );
+}
 
-      {/* Card ancora: e' anche il pulsante della demo. */}
-      <div className="relative h-[196px] w-[148px] shrink-0 overflow-hidden rounded-xl shadow-[0_22px_44px_-20px_rgba(114,0,38,.55)] sm:h-[300px] sm:w-[180px]">
-        <Image src="/brand/tv-team.jpg" alt="" fill sizes="172px" className="object-cover" priority />
-        <div className="absolute inset-0 bg-wine/[0.62]" />
-        <div className="absolute inset-0 flex flex-col justify-end gap-2 p-3.5">
-          <div className="text-[15px] font-bold leading-[1.18] text-white">
-            Fondi STEP 2026
-            <br />
-            fino al 70%
-          </div>
-          <div className="text-[9px] font-semibold tracking-[0.08em] text-apricot">TIMEVISION.IT</div>
-        </div>
-        <button
-          type="button"
-          aria-label="Guarda la demo"
-          className="absolute left-1/2 top-[38%] flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-wine/35 backdrop-blur-[6px] transition-colors hover:bg-wine/55"
-        >
-          <Play size={18} fill="#ffffff" stroke="none" />
-        </button>
-      </div>
+/** I rifiuti di NextAuth arrivano qui come stringhe: vanno tradotti. */
+function errorMessage(code: string): string {
+  if (code === "AccessDenied") {
+    return `Quell'account non e' del dominio @${ALLOWED_EMAIL_DOMAIN}. Lo Studio e' riservato al team Time Vision.`;
+  }
+  if (code === "Configuration") {
+    return "L'accesso Google non e' configurato correttamente. Avvisa chi gestisce lo Studio.";
+  }
+  return "Accesso non riuscito. Riprova, oppure avvisa chi gestisce lo Studio.";
+}
 
-      {/* Colonna dei formati: stampa, social, 3D. */}
-      <div className="flex shrink-0 flex-col gap-3">
-        <div className="relative h-[108px] w-[160px] overflow-hidden rounded-[9px] shadow-[0_16px_30px_-18px_rgba(114,0,38,.5)] sm:h-[136px] sm:w-[186px]">
-          <Image src="/brand/tv-digitale.jpg" alt="" fill sizes="186px" className="object-cover" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(42,17,25,.86)_38%,rgba(42,17,25,0)_100%)]" />
-          <div className="absolute left-3 top-3.5 w-28 text-[11px] font-semibold leading-[1.28] text-white">
-            Voucher Cloud e Cybersecurity
-          </div>
-          <div className="absolute bottom-3 left-3 text-[9px] font-semibold tracking-[0.08em] text-apricot">
-            CLICK-DAY 10 NOV
-          </div>
-        </div>
-
-        <div className="flex h-[60px] w-[160px] items-center gap-2.5 rounded-[9px] border border-wine-edge bg-paper px-3 shadow-[0_16px_30px_-20px_rgba(114,0,38,.45)] sm:w-[186px]">
-          <div className="flex size-[34px] shrink-0 items-center justify-center rounded-lg bg-wine-tint">
-            <Box size={17} strokeWidth={1.9} className="text-rose" />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[11px] font-semibold text-ink">Visual 3D · render</div>
-            <div className="text-[10px] text-ink-faint">4 varianti pronte</div>
-          </div>
-        </div>
-
-        <div className="relative hidden h-[104px] w-[186px] overflow-hidden rounded-[9px] shadow-[0_16px_30px_-18px_rgba(114,0,38,.5)] sm:block">
-          <Image src="/brand/tv-network.jpg" alt="" fill sizes="186px" className="object-cover" />
-          <div className="absolute inset-0 bg-wine/[0.58]" />
-          <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-2">
-            <div className="text-[11px] font-semibold leading-tight text-white">Post LinkedIn</div>
-            <div className="text-[9px] font-semibold tracking-[0.08em] text-apricot">3 VARIANTI</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Colonna social + carta stampata. */}
-      <div className="hidden shrink-0 translate-y-2.5 flex-col gap-3 lg:flex">
-        <div className="relative h-[172px] w-[146px] overflow-hidden rounded-[9px] shadow-[0_16px_30px_-18px_rgba(114,0,38,.5)]">
-          <Image src="/brand/tv-consulenza.jpg" alt="" fill sizes="146px" className="object-cover" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(42,17,25,0)_42%,rgba(42,17,25,.82)_100%)]" />
-          <div className="absolute inset-x-3 bottom-3">
-            <div className="text-[11px] font-semibold leading-tight text-white">Carosello IG</div>
-            <div className="mt-0.5 text-[9px] font-semibold tracking-[0.08em] text-apricot">6 SLIDE</div>
-          </div>
-        </div>
-
-        <div className="relative h-[128px] w-[146px] overflow-hidden rounded-[9px] shadow-[0_16px_30px_-18px_rgba(114,0,38,.5)]">
-          <Image src="/brand/tv-fondi.jpg" alt="" fill sizes="146px" className="object-cover" />
-          <div className="absolute inset-0 bg-wine/[0.55]" />
-          <div className="absolute inset-x-3 bottom-3 text-[11px] font-semibold leading-tight text-white">
-            Catalogo A4
-          </div>
-        </div>
-      </div>
-
-      {/* Chiude il collage dal lato opposto alla card ruotata. */}
-      <div className="relative hidden h-[268px] w-[132px] shrink-0 -translate-y-1 rotate-2 overflow-hidden rounded-[9px] shadow-[0_18px_34px_-18px_rgba(114,0,38,.55)] xl:block">
-        <Image
-          src="/brand/tv-master.jpg"
-          alt=""
-          fill
-          sizes="132px"
-          className="object-cover object-[64%_38%]"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(114,0,38,.18)_0%,rgba(114,0,38,0)_45%,rgba(42,17,25,.8)_100%)]" />
-        <div className="absolute inset-x-3 bottom-3">
-          <div className="text-[11px] font-semibold leading-tight text-white">Brand Kit</div>
-          <div className="mt-0.5 text-[9px] font-semibold tracking-[0.08em] text-apricot">
-            TEMPLATE FIGMA
-          </div>
-        </div>
-      </div>
-    </>
+function GoogleGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden focusable="false">
+      <path
+        fill="#4285F4"
+        d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M11.69 28.18c-.44-1.32-.69-2.73-.69-4.18s.25-2.86.69-4.18v-5.7H4.34A21.99 21.99 0 0 0 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"
+      />
+      <path
+        fill="#EA4335"
+        d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"
+      />
+    </svg>
   );
 }

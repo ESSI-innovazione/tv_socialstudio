@@ -9,12 +9,12 @@ insert into campaigns (name, slug, active) values
 on conflict (slug) do nothing;
 
 insert into tools (slug, title, description, prompt_template, default_formats, run_count, note, automatic, position) values
-  ('poster-bando', 'Poster builder',
+  ('poster-bando', 'Poster per un bando',
    'Poster A4 per bandi e finanziamenti, con countdown e disclaimer normativo',
    'Costruisci un poster A4 per il bando {{bando}}. Metti in evidenza il countdown alla scadenza {{scadenza}} e chiudi con il disclaimer normativo obbligatorio. Tono istituzionale e diretto, destinatario {{target}}. CTA: {{cta}}.',
    '{poster-a4}', 34, null, false, 1),
 
-  ('catalogo-servizi', 'Catalogo',
+  ('catalogo-servizi', 'Catalogo servizi',
    'Catalogo PDF multipagina costruito dai servizi selezionati',
    'Costruisci un catalogo PDF multipagina dai servizi {{servizi}}. Una pagina di copertina, una pagina per servizio, una pagina di contatto. Tono {{tono}}, destinatario {{target}}.',
    '{poster-a4}', 9, null, false, 2),
@@ -24,7 +24,7 @@ insert into tools (slug, title, description, prompt_template, default_formats, r
    'Genera un key visual 3D dal concept {{concept}}. Rendi disponibili i mockup nei formati richiesti. Palette istituzionale, nessun colore fuori brand.',
    '{linkedin,ig-feed}', 6, null, false, 3),
 
-  ('social-kit', 'Social kit',
+  ('social-kit', 'Kit social',
    'LinkedIn, IG feed e story dallo stesso layout, con caption gia scritte',
    'Declina {{argomento}} in LinkedIn 1200x627, Instagram feed 1080x1080 e story 1080x1920 dallo stesso impianto. Scrivi anche le caption per canale. CTA: {{cta}}.',
    '{linkedin,ig-feed,ig-story}', 47, null, false, 4),

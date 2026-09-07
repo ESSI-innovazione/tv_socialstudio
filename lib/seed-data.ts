@@ -16,7 +16,7 @@ const TOOLS: Tool[] = [
   {
     id: "tool-poster",
     slug: "poster-bando",
-    title: "Poster builder",
+    title: "Poster per un bando",
     description: "Poster A4 per bandi e finanziamenti, con countdown e disclaimer normativo",
     prompt_template:
       "Costruisci un poster A4 per il bando {{bando}}. Metti in evidenza il countdown alla scadenza {{scadenza}} e chiudi con il disclaimer normativo obbligatorio. Tono istituzionale e diretto, destinatario {{target}}. CTA: {{cta}}.",
@@ -29,7 +29,7 @@ const TOOLS: Tool[] = [
   {
     id: "tool-catalogo",
     slug: "catalogo-servizi",
-    title: "Catalogo",
+    title: "Catalogo servizi",
     description: "Catalogo PDF multipagina costruito dai servizi selezionati",
     prompt_template:
       "Costruisci un catalogo PDF multipagina dai servizi {{servizi}}. Una pagina di copertina, una pagina per servizio, una pagina di contatto. Tono {{tono}}, destinatario {{target}}.",
@@ -55,7 +55,7 @@ const TOOLS: Tool[] = [
   {
     id: "tool-social",
     slug: "social-kit",
-    title: "Social kit",
+    title: "Kit social",
     description: "LinkedIn, IG feed e story dallo stesso layout, con caption già scritte",
     prompt_template:
       "Declina {{argomento}} in LinkedIn 1200x627, Instagram feed 1080x1080 e story 1080x1920 dallo stesso impianto. Scrivi anche le caption per canale. CTA: {{cta}}.",

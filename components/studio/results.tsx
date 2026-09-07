@@ -1,45 +1,55 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Check, CircleAlert, FileDown, RotateCcw, TriangleAlert } from "lucide-react";
-import { FORMATS, type FormatId } from "@/lib/brand";
-import { UNVERIFIED } from "@/lib/brand";
+import { Check, ChevronDown, CircleAlert, PencilRuler, RotateCcw, TriangleAlert } from "lucide-react";
+import { FORMATS, UNVERIFIED, type FormatId } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
-import {
-  archetypeFromLabel,
-  templateLayout,
-  type AssetLayout,
-  type BlockText,
-} from "@/lib/layout-model";
+import { archetypeFromLabel, templateLayout, type AssetLayout, type BlockText } from "@/lib/layout-model";
 import type { GuardCheck, Run, VariantCopy } from "@/lib/types";
+import type { StudioUser } from "@/auth";
 import { AssetPreview } from "./asset-preview";
-import { AssetEditor } from "./asset-editor";
+import { AssetWorkbench } from "./asset-workbench";
 
 interface Props {
   run: Run;
   selected: number;
   onSelect: (index: number) => void;
   onEdit: (index: number, patch: Partial<VariantCopy>) => void;
+  onPhoto: (url: string) => void;
   onReset: () => void;
+  user: StudioUser;
+  channelsLive: boolean;
 }
 
-export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
+type Tab = "testo" | "fonti";
+
+/** Larghezza dell'anteprima grande, per formato: il landscape ha bisogno di respiro. */
+const PREVIEW_WIDTH: Record<FormatId, number> = {
+  linkedin: 620,
+  "ig-feed": 400,
+  "poster-a4": 330,
+  "ig-story": 250,
+};
+
+/**
+ * Il risultato: scegli una variante, guardala grande, e fai una cosa sola.
+ *
+ * Il ritocco leggero — il testo — sta sotto, in una scheda. Quello serio
+ * apre l'editor a tutto schermo, dove stanno anche export e pubblicazione.
+ */
+export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, user, channelsLive }: Props) {
   const variant = run.variants.find((v) => v.index === selected) ?? run.variants[0];
   const blocking = run.guard.some((c) => c.status === "fail");
 
-  // Il formato che si sta impaginando. Gli altri si allineano da soli.
-  const [editFormat, setEditFormat] = useState<FormatId>(run.formats[0] ?? "linkedin");
-
-  /**
-   * Un layout per coppia variante-formato. Finche' non e' stato toccato, la
-   * chiave non esiste e vale quello del template.
-   */
+  const [format, setFormat] = useState<FormatId>(run.formats[0] ?? "linkedin");
+  const [tab, setTab] = useState<Tab>("testo");
+  const [editing, setEditing] = useState(false);
   const [layouts, setLayouts] = useState<Record<string, AssetLayout>>({});
 
   const archetype = archetypeFromLabel(variant?.layout);
-  const layoutKey = `${variant?.index ?? 0}:${editFormat}`;
+  const layoutKey = `${variant?.index ?? 0}:${format}`;
 
-  const blockText: BlockText = {
+  const text: BlockText = {
     eyebrow: variant?.eyebrow ?? "",
     headline: variant?.headline ?? "",
     subhead: variant?.subhead ?? "",
@@ -47,130 +57,63 @@ export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
     badge: variant?.badge ?? null,
     disclaimer: variant?.disclaimer ?? null,
   };
-
-  const layout = layouts[layoutKey] ?? templateLayout(editFormat, archetype, blockText);
-
+  const layout = layouts[layoutKey] ?? templateLayout(format, archetype, text);
   const onLayoutChange = useCallback(
     (next: AssetLayout) => setLayouts((current) => ({ ...current, [layoutKey]: next })),
     [layoutKey],
   );
+  const modified = Boolean(layouts[layoutKey]);
 
   return (
-    <div className="flex flex-col gap-6 px-8 py-7">
-      <header className="tv-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="flex h-[20px] w-[20px] items-center justify-center rounded-full"
-                style={{ background: "var(--color-success-bg)", color: "var(--color-success)" }}
-              >
-                <Check size={13} strokeWidth={2.6} />
-              </span>
-              <p className="tv-label" style={{ color: "var(--color-success)" }}>
-                ESECUZIONE CONCLUSA
-              </p>
-            </div>
-            <p
-              className="mt-2 line-clamp-2 max-w-[52ch] text-[14px] leading-[1.5]"
-              style={{ color: "var(--color-ink)" }}
-            >
-              {run.instruction}
-            </p>
-            <p className="mt-2 text-[12px]" style={{ color: "var(--color-ink-faint)" }}>
-              {run.variants.length} varianti · {run.assets.length} asset ·{" "}
-              {durationLabel(run.duration_ms)}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              className="tv-pill h-[38px] gap-2 px-4 text-[13px] transition-colors"
-              style={{ border: "1px solid var(--color-line)", color: "var(--color-ink-soft)" }}
-            >
-              <FileDown size={15} strokeWidth={1.9} />
-              Scarica tutto
-            </button>
-            <button
-              type="button"
-              onClick={onReset}
-              className="tv-pill h-[38px] gap-2 px-4 text-[13px] transition-colors"
-              style={{ background: "var(--color-wine-tint)", color: "var(--color-wine)" }}
-            >
-              <RotateCcw size={15} strokeWidth={1.9} />
-              Nuova istruzione
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {run.guard.map((check) => (
-            <GuardChip key={check.key} check={check} />
-          ))}
-        </div>
-
-        {blocking ? (
-          <p
-            className="mt-3 rounded-[10px] px-3 py-2 text-[12.5px]"
-            style={{ background: "#fdecea", color: "#8c1d18" }}
-          >
-            Brand guard ha bloccato la pubblicazione. Correggi le verifiche fallite per procedere.
+    <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 px-8 py-7">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-semibold tracking-[-0.01em]" style={{ color: "var(--color-ink)" }}>
+            Asset pronti
+          </h1>
+          <p className="mt-1 text-[13.5px]" style={{ color: "var(--color-ink-soft)" }}>
+            {run.variants.length} varianti · {run.assets.length} asset · {durationLabel(run.duration_ms)}
           </p>
-        ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          className="tv-pill h-[38px] cursor-pointer gap-2 px-4 text-[13px] transition-colors hover:bg-line-soft"
+          style={{ border: "1px solid var(--color-line)", color: "var(--color-ink-soft)" }}
+        >
+          <RotateCcw size={15} strokeWidth={1.9} />
+          Nuova creazione
+        </button>
       </header>
+
+      <GuardSummary checks={run.guard} blocking={blocking} />
 
       {/* ---------------- varianti ---------------- */}
       <section>
-        <div className="flex items-baseline justify-between pb-2.5">
-          <p className="tv-label">VARIANTI</p>
-          <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-            seleziona quella da declinare e pubblicare
-          </span>
-        </div>
+        <p className="tv-label pb-2.5">SCEGLI LA VARIANTE</p>
         <div className="grid grid-cols-3 gap-3">
           {run.variants.map((v) => {
             const on = v.index === selected;
-            const primary = run.formats[0] ?? "linkedin";
             return (
               <button
                 key={v.index}
                 type="button"
                 onClick={() => onSelect(v.index)}
                 aria-pressed={on}
-                className="flex flex-col gap-2.5 rounded-card bg-paper p-2.5 text-left transition-all"
+                className="flex cursor-pointer flex-col gap-2 rounded-card bg-paper p-2 text-left transition-[border-color,box-shadow]"
                 style={{
                   border: `1.5px solid ${on ? "var(--color-rose)" : "var(--color-line)"}`,
-                  boxShadow: on ? "var(--shadow-card)" : "var(--shadow-card-soft)",
+                  boxShadow: on ? "0 0 0 3px rgb(206 66 87 / 0.12)" : "none",
                 }}
               >
                 <div className="flex justify-center">
-                  <AssetPreview
-                    variant={v}
-                    format={primary}
-                    photo={run.brief?.photo}
-                    displayWidth={196}
-                  />
+                  <AssetPreview variant={v} format={run.formats[0] ?? "linkedin"} photo={run.brief?.photo} displayWidth={228} />
                 </div>
                 <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
-                  <span
-                    className="truncate text-[12.5px]"
-                    style={{
-                      color: on ? "var(--color-wine)" : "var(--color-ink-soft)",
-                      fontWeight: on ? 600 : 400,
-                    }}
-                  >
+                  <span className="truncate text-[13px]" style={{ color: on ? "var(--color-wine)" : "var(--color-ink-soft)", fontWeight: on ? 600 : 400 }}>
                     {v.layout}
                   </span>
-                  <span
-                    className="tv-pill h-[20px] shrink-0 px-2 text-[10.5px]"
-                    style={{
-                      background: on ? "var(--color-wine-tint)" : "var(--color-line-soft)",
-                      color: on ? "var(--color-wine)" : "var(--color-ink-faint)",
-                    }}
-                  >
-                    V{v.index + 1}
-                  </span>
+                  {on ? <Check size={15} strokeWidth={2.6} className="shrink-0" style={{ color: "var(--color-rose)" }} /> : null}
                 </div>
               </button>
             );
@@ -178,178 +121,102 @@ export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
         </div>
       </section>
 
-      {/* ---------------- testo condiviso ---------------- */}
+      {/* ---------------- anteprima grande ---------------- */}
       {variant ? (
         <section className="tv-card p-5">
-          <div className="flex items-baseline justify-between pb-3">
-            <p className="tv-label">TESTO DELLA VARIANTE {variant.index + 1}</p>
-            <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-              una modifica qui si propaga a tutti i formati
-            </span>
-          </div>
-          <div className="flex flex-col gap-3">
-            <Field
-              label="Occhiello"
-              value={variant.eyebrow}
-              onChange={(eyebrow) => onEdit(variant.index, { eyebrow })}
-            />
-            <Field
-              label="Titolo"
-              value={variant.headline}
-              size="lg"
-              onChange={(headline) => onEdit(variant.index, { headline })}
-            />
-            <Field
-              label="Sottotitolo"
-              value={variant.subhead}
-              onChange={(subhead) => onEdit(variant.index, { subhead })}
-            />
-            <Field
-              label="Banda"
-              value={variant.badge ?? ""}
-              onChange={(badge) => onEdit(variant.index, { badge: badge || null })}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      {/* ---------------- impaginazione ---------------- */}
-      {variant ? (
-        <section className="tv-card p-5">
-          <div className="flex flex-wrap items-center gap-2 pb-3">
-            {run.formats.map((format) => {
-              const on = format === editFormat;
+          <div className="flex flex-wrap items-center gap-2 pb-4">
+            {run.formats.map((f) => {
+              const on = f === format;
               return (
                 <button
-                  key={format}
+                  key={f}
                   type="button"
-                  onClick={() => setEditFormat(format)}
+                  onClick={() => setFormat(f)}
                   aria-pressed={on}
-                  className="tv-pill h-[32px] px-3.5 text-[12.5px] transition-colors"
-                  style={{
-                    background: on ? "var(--color-wine)" : "var(--color-line-soft)",
-                    color: on ? "#ffffff" : "var(--color-ink-soft)",
-                  }}
+                  className="tv-pill h-[34px] cursor-pointer px-3.5 text-[13px] transition-colors"
+                  style={{ background: on ? "var(--color-wine)" : "var(--color-line-soft)", color: on ? "#ffffff" : "var(--color-ink-soft)" }}
                 >
-                  {FORMATS[format].label}
+                  {FORMATS[f].label}
                 </button>
               );
             })}
-            <div className="flex-1" />
-            {layouts[layoutKey] ? (
-              <span
-                className="tv-pill h-[26px] px-2.5 text-[11px]"
-                style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
-              >
-                impaginazione modificata
-              </span>
+            <span className="ml-auto text-[12px]" style={{ color: "var(--color-ink-faint)" }}>
+              {FORMATS[format].exportNote}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="tv-pill h-[34px] cursor-pointer gap-2 px-3.5 text-[13px] transition-colors"
+              style={{ background: "var(--color-wine-tint)", color: "var(--color-wine)" }}
+            >
+              <PencilRuler size={14} strokeWidth={2} />
+              Modifica
+              {modified ? <span className="h-[6px] w-[6px] rounded-full" style={{ background: "var(--color-coral)" }} aria-label="impaginazione modificata" /> : null}
+            </button>
+          </div>
+
+          <div className="flex justify-center rounded-[12px] py-5" style={{ background: "var(--color-line-soft)" }}>
+            <AssetPreview variant={variant} format={format} photo={run.brief?.photo} displayWidth={PREVIEW_WIDTH[format]} />
+          </div>
+
+          <Tabs tab={tab} onTab={setTab} facts={run.brief?.facts.length ?? 0} />
+
+          <div className="tv-anim-rise pt-4" key={tab}>
+            {tab === "testo" ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>
+                  Una modifica qui vale per tutti i formati. Per tutto il resto, apri l&apos;editor.
+                </p>
+                <Field label="Occhiello" value={variant.eyebrow} onChange={(eyebrow) => onEdit(variant.index, { eyebrow })} />
+                <Field label="Titolo" value={variant.headline} size="lg" onChange={(headline) => onEdit(variant.index, { headline })} />
+                <Field label="Sottotitolo" value={variant.subhead} onChange={(subhead) => onEdit(variant.index, { subhead })} />
+                <Field label="Banda" value={variant.badge ?? ""} onChange={(badge) => onEdit(variant.index, { badge: badge || null })} />
+              </div>
+            ) : null}
+
+            {tab === "fonti" && run.brief ? (
+              <ul className="flex flex-col gap-2">
+                {run.brief.facts.map((fact) => (
+                  <li
+                    key={fact.claim}
+                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[10px] px-3 py-2"
+                    style={{ background: fact.verified ? "var(--color-line-soft)" : "var(--color-warm-tint)" }}
+                  >
+                    <span className="min-w-[168px] text-[13px] font-semibold" style={{ color: "var(--color-ink)" }}>
+                      {fact.claim}
+                    </span>
+                    <span className="text-[13px]" style={{ color: fact.verified ? "var(--color-ink-soft)" : "var(--color-warning)", fontWeight: fact.verified ? 400 : 600 }}>
+                      {fact.value}
+                    </span>
+                    <span className="ml-auto text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
+                      {fact.source}
+                    </span>
+                  </li>
+                ))}
+                <li className="pt-1 text-[12px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
+                  I dati segnati {UNVERIFIED} non compaiono sugli asset finché una fonte non li conferma.
+                </li>
+              </ul>
             ) : null}
           </div>
-
-          <AssetEditor
-            copy={variant}
-            layout={layout}
-            archetype={archetype}
-            photo={run.brief?.photo ?? "tv-digitale.jpg"}
-            onChange={onLayoutChange}
-            width={editFormat === "linkedin" ? 420 : editFormat === "ig-story" ? 220 : 300}
-          />
         </section>
       ) : null}
 
-      {/* ---------------- declinazioni ---------------- */}
-      {variant ? (
-        <section>
-          <div className="flex items-baseline justify-between pb-2.5">
-            <p className="tv-label">DECLINAZIONI</p>
-            <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-              ogni formato mantiene la propria griglia
-            </span>
-          </div>
-          <div className="flex flex-wrap items-start gap-4">
-            {run.formats.map((format) => {
-              const spec = FORMATS[format];
-              const asset = run.assets.find(
-                (a) => a.format === format && a.variant_index === variant.index,
-              );
-              return (
-                <figure
-                  key={format}
-                  className="rounded-card bg-paper p-2.5"
-                  style={{ border: "1px solid var(--color-line)" }}
-                >
-                  <AssetPreview
-                    variant={variant}
-                    format={format}
-                    photo={run.brief?.photo}
-                    displayWidth={format === "linkedin" ? 260 : 168}
-                  />
-                  <figcaption className="pt-2">
-                    <p className="text-[12px] font-semibold" style={{ color: "var(--color-ink)" }}>
-                      {spec.label}
-                    </p>
-                    <p className="text-[10.5px]" style={{ color: "var(--color-ink-faint)" }}>
-                      {spec.exportNote}
-                    </p>
-                    {asset ? (
-                      <p
-                        className="tv-mono pt-1 text-[9.5px]"
-                        style={{ color: "var(--color-ink-faint)" }}
-                        title={`Fonti: ${asset.source_documents.join(", ")}`}
-                      >
-                        {asset.source_documents.length} fonti registrate
-                      </p>
-                    ) : null}
-                  </figcaption>
-                </figure>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      {/* ---------------- provenienza ---------------- */}
-      {run.brief ? (
-        <section className="tv-card p-5">
-          <p className="tv-label pb-3">DATI E FONTI</p>
-          <ul className="flex flex-col gap-2">
-            {run.brief.facts.map((fact) => (
-              <li
-                key={fact.claim}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[10px] px-3 py-2"
-                style={{
-                  background: fact.verified ? "var(--color-line-soft)" : "var(--color-warm-tint)",
-                }}
-              >
-                <span
-                  className="min-w-[168px] text-[12.5px] font-semibold"
-                  style={{ color: "var(--color-ink)" }}
-                >
-                  {fact.claim}
-                </span>
-                <span
-                  className="text-[12.5px]"
-                  style={{
-                    color: fact.verified ? "var(--color-ink-soft)" : "var(--color-warning)",
-                    fontWeight: fact.verified ? 400 : 600,
-                  }}
-                >
-                  {fact.value}
-                </span>
-                <span
-                  className="tv-mono ml-auto text-[10.5px]"
-                  style={{ color: "var(--color-ink-faint)" }}
-                >
-                  {fact.source}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[11.5px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
-            I dati marcati {UNVERIFIED} non compaiono sugli asset finché non vengono confermati da
-            una fonte.
-          </p>
-        </section>
+      {editing && variant ? (
+        <AssetWorkbench
+          run={run}
+          variant={variant}
+          format={format}
+          onFormat={setFormat}
+          layout={layout}
+          archetype={archetype}
+          onLayoutChange={onLayoutChange}
+          onEdit={(patch) => onEdit(variant.index, patch)}
+          onPhoto={onPhoto}
+          user={user}
+          channelsLive={channelsLive}
+          onClose={() => setEditing(false)}
+        />
       ) : null}
     </div>
   );
@@ -357,52 +224,89 @@ export function Results({ run, selected, onSelect, onEdit, onReset }: Props) {
 
 /* ------------------------------------------------------------------ */
 
-function Field({
-  label,
-  value,
-  onChange,
-  size = "sm",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  size?: "sm" | "lg";
-}) {
+function Tabs({ tab, onTab, facts }: { tab: Tab; onTab: (t: Tab) => void; facts: number }) {
+  const items: { key: Tab; label: string; badge?: string }[] = [
+    { key: "testo", label: "Testo" },
+    { key: "fonti", label: "Dati e fonti", badge: facts > 0 ? String(facts) : undefined },
+  ];
+  return (
+    <div role="tablist" className="mt-4 flex gap-1" style={{ borderBottom: "1px solid var(--color-line)" }}>
+      {items.map((item) => {
+        const on = item.key === tab;
+        return (
+          <button
+            key={item.key}
+            role="tab"
+            type="button"
+            aria-selected={on}
+            onClick={() => onTab(item.key)}
+            className="-mb-px flex cursor-pointer items-center gap-2 px-3.5 py-2.5 text-[13.5px] transition-colors"
+            style={{ color: on ? "var(--color-wine)" : "var(--color-ink-soft)", fontWeight: on ? 600 : 500, borderBottom: `2px solid ${on ? "var(--color-wine)" : "transparent"}` }}
+          >
+            {item.label}
+            {item.badge ? (
+              <span className="tv-pill h-[18px] px-1.5 text-[10.5px]" style={{ background: on ? "var(--color-wine-tint)" : "var(--color-line-soft)", color: on ? "var(--color-wine)" : "var(--color-ink-faint)" }}>
+                {item.badge}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, size = "sm" }: { label: string; value: string; onChange: (v: string) => void; size?: "sm" | "lg" }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="tv-label">{label.toUpperCase()}</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-[10px] px-3 py-2.5 outline-none transition-colors focus:border-rose"
-        style={{
-          border: "1px solid var(--color-line)",
-          background: "var(--color-paper)",
-          color: "var(--color-ink)",
-          fontSize: size === "lg" ? 17 : 13.5,
-          fontWeight: size === "lg" ? 600 : 400,
-        }}
+        className="w-full rounded-[10px] px-3 py-2.5 outline-none transition-[border-color,box-shadow] focus:shadow-focus"
+        style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)", fontSize: size === "lg" ? 17 : 14, fontWeight: size === "lg" ? 600 : 400 }}
       />
     </label>
   );
 }
 
-function GuardChip({ check }: { check: GuardCheck }) {
-  const tone =
-    check.status === "pass"
-      ? { bg: "var(--color-success-bg)", fg: "var(--color-success)", Icon: Check }
-      : check.status === "warn"
-        ? { bg: "var(--color-warm-tint)", fg: "var(--color-warning)", Icon: TriangleAlert }
-        : { bg: "#fdecea", fg: "#8c1d18", Icon: CircleAlert };
+/** Il controllo del brand in una riga. Le singole verifiche si aprono solo se servono. */
+function GuardSummary({ checks, blocking }: { checks: GuardCheck[]; blocking: boolean }) {
+  const [open, setOpen] = useState(blocking);
+  const passed = checks.filter((c) => c.status === "pass").length;
+  const warned = checks.filter((c) => c.status === "warn").length;
+  const failed = checks.filter((c) => c.status === "fail").length;
+
+  const tone = failed > 0
+    ? { bg: "#fdecea", fg: "#8c1d18", Icon: CircleAlert }
+    : warned > 0
+      ? { bg: "var(--color-warm-tint)", fg: "var(--color-warning)", Icon: TriangleAlert }
+      : { bg: "var(--color-success-bg)", fg: "var(--color-success)", Icon: Check };
   const { Icon } = tone;
+
+  const line = failed > 0
+    ? `Controllo del brand: ${failed} ${failed === 1 ? "verifica fallita" : "verifiche fallite"}. La pubblicazione è bloccata.`
+    : warned > 0
+      ? `Controllo del brand: ${passed} ok, ${warned} ${warned === 1 ? "avviso" : "avvisi"}.`
+      : `Controllo del brand: tutte le ${passed} verifiche superate.`;
+
   return (
-    <span
-      className="tv-pill h-[28px] gap-1.5 px-3 text-[11.5px]"
-      style={{ background: tone.bg, color: tone.fg }}
-      title={check.detail ?? undefined}
-    >
-      <Icon size={13} strokeWidth={2.2} />
-      {check.label}
-    </span>
+    <section className="rounded-card px-4 py-3" style={{ background: tone.bg }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full cursor-pointer items-center gap-2.5 text-left text-[13.5px] font-semibold" style={{ color: tone.fg }}>
+        <Icon size={16} strokeWidth={2.4} className="shrink-0" />
+        <span className="flex-1">{line}</span>
+        <ChevronDown size={16} strokeWidth={2.2} className="shrink-0 transition-transform" style={{ transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open ? (
+        <ul className="tv-anim-rise mt-2.5 flex flex-col gap-1 pl-[26px]">
+          {checks.map((check) => (
+            <li key={check.key} className="flex flex-wrap gap-x-2 text-[13px]" style={{ color: "var(--color-ink)" }}>
+              <span className="font-semibold">{check.label}</span>
+              {check.detail ? <span style={{ color: "var(--color-ink-soft)" }}>{check.detail}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }

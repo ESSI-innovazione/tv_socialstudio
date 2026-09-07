@@ -29,6 +29,10 @@
   --color-warning: #a8481a;
   --color-warning-bg: #fff2ea;
 
+  /* I due fondi scuri: la notte dietro il muro di visual, e il vetro sopra. */
+  --color-night: #1a0a11;
+  --color-night-glass: #2a1119;
+
   --color-mute: #e0d2d6;
   --color-on-wine: #e8c4cb;
   --color-on-wine-faint: #d8a3ae;

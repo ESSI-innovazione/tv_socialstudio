@@ -74,7 +74,7 @@ export function Composition({
         <div style={{ position: "relative", flex: "1 1 auto", overflow: "hidden" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/brand/${photo}`}
+            src={photo.startsWith("http") || photo.startsWith("/") ? photo : `/brand/${photo}`}
             alt=""
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />

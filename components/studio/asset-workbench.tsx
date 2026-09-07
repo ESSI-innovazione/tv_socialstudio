@@ -1,0 +1,521 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Building2,
+  Camera,
+  Check,
+  Download,
+  FileImage,
+  FileText,
+  Hash,
+  Image as ImageIcon,
+  Layers,
+  Lock,
+  Palette,
+  Presentation,
+  Send,
+  Share2,
+  Type,
+} from "lucide-react";
+import { FORMATS, type FormatId } from "@/lib/brand";
+import type { ArchetypeId, AssetLayout } from "@/lib/layout-model";
+import type { Caption, Run, VariantCopy } from "@/lib/types";
+import type { ImageChoice } from "@/lib/integrations/types";
+import type { StudioUser } from "@/auth";
+import { AssetEditor } from "./asset-editor";
+
+interface Props {
+  run: Run;
+  variant: VariantCopy;
+  format: FormatId;
+  onFormat: (f: FormatId) => void;
+  layout: AssetLayout;
+  archetype: ArchetypeId;
+  onLayoutChange: (layout: AssetLayout) => void;
+  onEdit: (patch: Partial<VariantCopy>) => void;
+  onPhoto: (url: string) => void;
+  user: StudioUser;
+  channelsLive: boolean;
+  onClose: () => void;
+}
+
+type Panel = "testo" | "foto" | "esporta" | "pubblica";
+type FileType = "png" | "pdf" | "svg" | "pptx";
+
+/** Larghezza della tela per formato: il landscape ha bisogno di respiro. */
+const CANVAS_WIDTH: Record<FormatId, number> = {
+  linkedin: 720,
+  "ig-feed": 520,
+  "poster-a4": 430,
+  "ig-story": 330,
+};
+
+/**
+ * L'editor a tutto schermo: la tela al centro, gli strumenti a sinistra, il
+ * pannello a destra. Un solo posto per ritoccare, esportare e pubblicare.
+ *
+ * Quello che oggi parte davvero e' l'export PNG. PDF, SVG, PPTX e i canali
+ * social sono al loro posto ma si dichiarano non ancora attivi: un bottone
+ * che finge sarebbe peggio di un bottone che aspetta.
+ */
+export function AssetWorkbench({
+  run,
+  variant,
+  format,
+  onFormat,
+  layout,
+  archetype,
+  onLayoutChange,
+  onEdit,
+  onPhoto,
+  user,
+  channelsLive,
+  onClose,
+}: Props) {
+  const [panel, setPanel] = useState<Panel>("testo");
+
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+
+  const photo = run.brief?.photo ?? "tv-digitale.jpg";
+
+  return (
+    <div className="fixed inset-0 z-40 flex flex-col bg-canvas" role="dialog" aria-modal="true" aria-label="Editor dell'asset">
+      {/* ---------------- barra ---------------- */}
+      <header className="flex h-[56px] shrink-0 items-center gap-4 bg-paper px-4" style={{ borderBottom: "1px solid var(--color-line)" }}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="tv-pill h-[36px] cursor-pointer gap-2 px-3.5 text-[13px] transition-colors hover:bg-line-soft"
+          style={{ color: "var(--color-ink-soft)" }}
+        >
+          <ArrowLeft size={16} strokeWidth={2} />
+          Risultati
+        </button>
+        <span className="h-6 w-px" style={{ background: "var(--color-line)" }} />
+        <p className="min-w-0 truncate text-[14px]" style={{ color: "var(--color-ink)" }}>
+          <span className="font-semibold">Variante {variant.index + 1}</span>
+          <span style={{ color: "var(--color-ink-faint)" }}> · {variant.layout}</span>
+        </p>
+
+        <div className="mx-auto flex items-center gap-1.5">
+          {run.formats.map((f) => {
+            const on = f === format;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onFormat(f)}
+                aria-pressed={on}
+                className="tv-pill h-[32px] cursor-pointer px-3.5 text-[12.5px] transition-colors"
+                style={{ background: on ? "var(--color-wine)" : "var(--color-line-soft)", color: on ? "#ffffff" : "var(--color-ink-soft)" }}
+              >
+                {FORMATS[f].label}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setPanel("esporta")}
+          className="tv-pill h-[36px] cursor-pointer gap-2 px-4 text-[13px] transition-colors hover:bg-line-soft"
+          style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
+        >
+          <Download size={15} strokeWidth={2} />
+          Esporta
+        </button>
+        <button
+          type="button"
+          onClick={() => setPanel("pubblica")}
+          className="tv-pill h-[36px] cursor-pointer gap-2 px-4 text-[13px]"
+          style={{ background: "var(--color-coral)", color: "#ffffff", boxShadow: "var(--shadow-coral)" }}
+        >
+          <Send size={15} strokeWidth={2} />
+          Pubblica
+        </button>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* ---------------- strumenti ---------------- */}
+        <nav className="flex w-[76px] shrink-0 flex-col items-center gap-1 bg-paper py-3" style={{ borderRight: "1px solid var(--color-line)" }} aria-label="Strumenti">
+          <Tool icon={Type} label="Testo" on={panel === "testo"} onClick={() => setPanel("testo")} />
+          <Tool icon={ImageIcon} label="Foto" on={panel === "foto"} onClick={() => setPanel("foto")} />
+          <Tool icon={Layers} label="Livelli" on={false} onClick={() => document.getElementById("workbench-layers")?.scrollIntoView({ behavior: "smooth", block: "nearest" })} />
+          <Tool icon={Palette} label="Colori" on={false} locked onClick={() => {}} />
+          <div className="flex-1" />
+          <Tool icon={Download} label="Esporta" on={panel === "esporta"} onClick={() => setPanel("esporta")} />
+          <Tool icon={Share2} label="Pubblica" on={panel === "pubblica"} onClick={() => setPanel("pubblica")} />
+        </nav>
+
+        {/* ---------------- tela ---------------- */}
+        <main className="tv-scroll flex min-w-0 flex-1 items-start justify-center overflow-auto p-8">
+          <div id="workbench-layers" className="tv-card p-5">
+            <AssetEditor copy={variant} layout={layout} archetype={archetype} photo={photo} onChange={onLayoutChange} width={CANVAS_WIDTH[format]} />
+          </div>
+        </main>
+
+        {/* ---------------- pannello ---------------- */}
+        <aside className="tv-scroll flex w-[340px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5" style={{ borderLeft: "1px solid var(--color-line)" }}>
+          {panel === "testo" ? <TextPanel variant={variant} onEdit={onEdit} /> : null}
+          {panel === "foto" ? <PhotoPanel current={photo} onPhoto={onPhoto} /> : null}
+          {panel === "esporta" ? <ExportPanel run={run} variant={variant} /> : null}
+          {panel === "pubblica" ? <PublishPanel run={run} user={user} channelsLive={channelsLive} /> : null}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function Tool({ icon: Icon, label, on, locked, onClick }: { icon: typeof Type; label: string; on: boolean; locked?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      title={locked ? "La palette è bloccata dal Brand Kit" : label}
+      className="flex w-[64px] cursor-pointer flex-col items-center gap-1 rounded-[10px] py-2 text-[11px] font-semibold transition-colors hover:bg-line-soft"
+      style={{ background: on ? "var(--color-wine-tint)" : "transparent", color: on ? "var(--color-wine)" : locked ? "var(--color-ink-faint)" : "var(--color-ink-soft)" }}
+    >
+      <span className="relative">
+        <Icon size={19} strokeWidth={1.9} />
+        {locked ? <Lock size={9} strokeWidth={2.5} className="absolute -right-1.5 -bottom-1" /> : null}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function PanelTitle({ children, hint }: { children: string; hint?: string }) {
+  return (
+    <div>
+      <p className="tv-label">{children}</p>
+      {hint ? (
+        <p className="mt-1 text-[12.5px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------------- testo ---------------- */
+
+function TextPanel({ variant, onEdit }: { variant: VariantCopy; onEdit: (patch: Partial<VariantCopy>) => void }) {
+  return (
+    <>
+      <PanelTitle hint="Una modifica qui vale per tutti i formati della variante.">TESTO</PanelTitle>
+      <Field label="Occhiello" value={variant.eyebrow} onChange={(eyebrow) => onEdit({ eyebrow })} />
+      <Field label="Titolo" value={variant.headline} size="lg" onChange={(headline) => onEdit({ headline })} />
+      <Field label="Sottotitolo" value={variant.subhead} onChange={(subhead) => onEdit({ subhead })} />
+      <Field label="Testo" value={variant.body} multiline onChange={(body) => onEdit({ body })} />
+      <Field label="Banda" value={variant.badge ?? ""} onChange={(badge) => onEdit({ badge: badge || null })} />
+      <Field label="Pulsante" value={variant.cta_label} onChange={(cta_label) => onEdit({ cta_label })} />
+      <Field label="Disclaimer" value={variant.disclaimer ?? ""} multiline onChange={(disclaimer) => onEdit({ disclaimer: disclaimer || null })} />
+    </>
+  );
+}
+
+function Field({ label, value, onChange, size = "sm", multiline = false }: { label: string; value: string; onChange: (v: string) => void; size?: "sm" | "lg"; multiline?: boolean }) {
+  const style = {
+    border: "1px solid var(--color-line)",
+    background: "var(--color-paper)",
+    color: "var(--color-ink)",
+    fontSize: size === "lg" ? 16 : 13.5,
+    fontWeight: size === "lg" ? 600 : 400,
+  } as const;
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="tv-label">{label.toUpperCase()}</span>
+      {multiline ? (
+        <textarea value={value} rows={3} onChange={(e) => onChange(e.target.value)} className="tv-scroll w-full resize-none rounded-[10px] px-3 py-2.5 leading-[1.5] outline-none focus:shadow-focus" style={style} />
+      ) : (
+        <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-[10px] px-3 py-2.5 outline-none focus:shadow-focus" style={style} />
+      )}
+    </label>
+  );
+}
+
+/* ---------------- foto ---------------- */
+
+function PhotoPanel({ current, onPhoto }: { current: string; onPhoto: (url: string) => void }) {
+  const [choices, setChoices] = useState<ImageChoice[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/images")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { archive: ImageChoice[]; generated: ImageChoice[] } | null) => {
+        if (!cancelled && data) setChoices([...data.archive, ...data.generated]);
+      })
+      .catch(() => !cancelled && setChoices([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isCurrent = (c: ImageChoice) => current === c.url || current === c.id || `/brand/${current}` === c.url;
+
+  return (
+    <>
+      <PanelTitle hint="Cambia la fotografia di questa variante. Il punto di fuoco si sposta sulla tela, trascinando il cerchio.">FOTO</PanelTitle>
+      {choices === null ? (
+        <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>
+          carico l&apos;archivio…
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {choices.map((c) => {
+            const on = isCurrent(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onPhoto(c.url)}
+                aria-pressed={on}
+                title={c.label}
+                className="relative aspect-[4/3] cursor-pointer overflow-hidden rounded-[8px]"
+                style={{ border: `2px solid ${on ? "var(--color-rose)" : "var(--color-line)"}` }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.url} alt={c.label} className="h-full w-full object-cover" loading="lazy" />
+                {on ? (
+                  <span className="absolute right-1 bottom-1 flex h-[18px] w-[18px] items-center justify-center rounded-full" style={{ background: "var(--color-rose)", color: "#ffffff" }}>
+                    <Check size={11} strokeWidth={3} />
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[12px] leading-[1.5]" style={{ color: "var(--color-ink-faint)" }}>
+        Per generare un visual nuovo torna al passo 3 della composizione.
+      </p>
+    </>
+  );
+}
+
+/* ---------------- esporta ---------------- */
+
+const FILE_TYPES: { id: FileType; label: string; hint: string; icon: typeof FileImage; ready: boolean }[] = [
+  { id: "png", label: "PNG", hint: "alla dimensione esatta del formato", icon: FileImage, ready: true },
+  { id: "pdf", label: "PDF", hint: "per la stampa, 300 dpi", icon: FileText, ready: false },
+  { id: "svg", label: "SVG", hint: "vettoriale, per l'agenzia", icon: Hash, ready: false },
+  { id: "pptx", label: "PPTX", hint: "una slide per formato", icon: Presentation, ready: false },
+];
+
+function ExportPanel({ run, variant }: { run: Run; variant: VariantCopy }) {
+  const [type, setType] = useState<FileType>("png");
+  const [formats, setFormats] = useState<FormatId[]>(run.formats);
+  const [all, setAll] = useState(false);
+
+  const toggle = (f: FormatId) => setFormats((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+  const chosen = FILE_TYPES.find((t) => t.id === type)!;
+  const variants = all ? run.variants : [variant];
+
+  return (
+    <>
+      <PanelTitle>ESPORTA</PanelTitle>
+
+      <div className="flex flex-col gap-1.5">
+        <p className="tv-label">FILE</p>
+        {FILE_TYPES.map((t) => {
+          const on = t.id === type;
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setType(t.id)}
+              aria-pressed={on}
+              className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors"
+              style={{ border: `1.5px solid ${on ? "var(--color-rose)" : "var(--color-line)"}`, background: on ? "var(--color-wine-tint)" : "var(--color-paper)" }}
+            >
+              <Icon size={17} strokeWidth={1.9} style={{ color: on ? "var(--color-wine)" : "var(--color-ink-faint)" }} />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13.5px] font-semibold" style={{ color: "var(--color-ink)" }}>
+                  {t.label}
+                </span>
+                <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
+                  {t.hint}
+                </span>
+              </span>
+              {!t.ready ? (
+                <span className="tv-pill h-[20px] px-2 text-[10.5px]" style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}>
+                  in arrivo
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <p className="tv-label">FORMATI</p>
+        {run.formats.map((f) => {
+          const on = formats.includes(f);
+          return (
+            <label key={f} className="flex cursor-pointer items-center gap-2.5 text-[13.5px]" style={{ color: "var(--color-ink)" }}>
+              <input type="checkbox" checked={on} onChange={() => toggle(f)} className="h-4 w-4 accent-[#ce4257]" />
+              {FORMATS[f].label}
+              <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
+                {FORMATS[f].exportNote}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-2.5 text-[13.5px]" style={{ color: "var(--color-ink)" }}>
+        <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="h-4 w-4 accent-[#ce4257]" />
+        Tutte le {run.variants.length} varianti
+      </label>
+
+      {chosen.ready ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="tv-label">SCARICA</p>
+          {variants.flatMap((v) =>
+            formats.map((f) => (
+              <a
+                key={`${v.index}-${f}`}
+                href={`/api/render/${run.id}/${v.index}/${f}.png`}
+                download={`timevision-v${v.index + 1}-${f}.png`}
+                className="tv-pill h-[38px] gap-2 px-3.5 text-[13px] transition-colors hover:bg-line-soft"
+                style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
+              >
+                <Download size={14} strokeWidth={2} style={{ color: "var(--color-rose)" }} />
+                V{v.index + 1} · {FORMATS[f].label}
+                <span className="ml-auto text-[11.5px] font-normal" style={{ color: "var(--color-ink-faint)" }}>
+                  {FORMATS[f].width}×{FORMATS[f].height}
+                </span>
+              </a>
+            )),
+          )}
+          {formats.length === 0 ? (
+            <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>
+              Scegli almeno un formato.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="rounded-[10px] px-3 py-2.5 text-[12.5px] leading-[1.5]" style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}>
+          L&apos;export {chosen.label} non è ancora attivo. Nel frattempo il PNG esce alla dimensione esatta di ogni formato.
+        </p>
+      )}
+    </>
+  );
+}
+
+/* ---------------- pubblica ---------------- */
+
+const SLACK_CHANNELS = ["#marketing", "#direzione", "#commerciale"];
+
+function PublishPanel({ run, user, channelsLive }: { run: Run; user: StudioUser; channelsLive: boolean }) {
+  const blocked = run.guard.some((c) => c.status === "fail");
+  const approver = user.role === "approver";
+  const linkedin = run.captions.find((c) => c.channel === "linkedin") ?? null;
+  const instagram = run.captions.find((c) => c.channel === "instagram") ?? null;
+
+  return (
+    <>
+      <PanelTitle hint={blocked ? "Il controllo del brand ha bloccato la pubblicazione." : approver ? `${user.name} può pubblicare.` : "Serve un approvatore: la richiesta parte da qui."}>
+        PUBBLICA
+      </PanelTitle>
+
+      <Channel icon={Camera} name="Instagram" handle="@timevision" live={channelsLive} caption={instagram} blocked={blocked} approver={approver}>
+        <div className="flex gap-1.5">
+          {(["Feed", "Story"] as const).map((s, i) => (
+            <label key={s} className="flex cursor-pointer items-center gap-1.5 text-[12.5px]" style={{ color: "var(--color-ink)" }}>
+              <input type="checkbox" defaultChecked={i === 0 ? run.formats.includes("ig-feed") : run.formats.includes("ig-story")} className="h-3.5 w-3.5 accent-[#ce4257]" />
+              {s}
+            </label>
+          ))}
+        </div>
+      </Channel>
+
+      <Channel icon={Building2} name="LinkedIn" handle="Pagina Time Vision" live={channelsLive} caption={linkedin} blocked={blocked} approver={approver} />
+
+      <Channel icon={Hash} name="Slack" handle="condividi col team" live={false} caption={null} blocked={false} approver={true} verb="Condividi">
+        <select className="h-[34px] w-full rounded-[8px] px-2 text-[12.5px]" style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }} defaultValue={SLACK_CHANNELS[0]}>
+          {SLACK_CHANNELS.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+      </Channel>
+    </>
+  );
+}
+
+function Channel({
+  icon: Icon,
+  name,
+  handle,
+  live,
+  caption,
+  blocked,
+  approver,
+  verb = "Pubblica",
+  children,
+}: {
+  icon: typeof Camera;
+  name: string;
+  handle: string;
+  live: boolean;
+  caption: Caption | null;
+  blocked: boolean;
+  approver: boolean;
+  verb?: string;
+  children?: React.ReactNode;
+}) {
+  const [text, setText] = useState(caption ? `${caption.text}\n\n${caption.hashtags.map((h) => `#${h}`).join(" ")}` : "");
+  const can = live && !blocked && approver;
+  const label = blocked ? "Bloccato dal brand guard" : !live ? "Canale non collegato" : approver ? `${verb} su ${name}` : "Richiedi approvazione";
+
+  return (
+    <section className="flex flex-col gap-2.5 rounded-card p-3.5" style={{ border: "1px solid var(--color-line)" }}>
+      <div className="flex items-center gap-2">
+        <Icon size={16} strokeWidth={1.9} style={{ color: "var(--color-wine)" }} />
+        <span className="text-[13.5px] font-semibold" style={{ color: "var(--color-ink)" }}>
+          {name}
+        </span>
+        <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
+          {handle}
+        </span>
+        <span className="tv-pill ml-auto h-[20px] px-2 text-[10.5px]" style={{ background: live ? "var(--color-success-bg)" : "var(--color-line-soft)", color: live ? "var(--color-success)" : "var(--color-ink-faint)" }}>
+          {live ? "collegato" : "da collegare"}
+        </span>
+      </div>
+      {children}
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={caption ? 5 : 2}
+        placeholder={caption ? undefined : "Un messaggio per il team…"}
+        className="tv-scroll w-full resize-none rounded-[10px] px-3 py-2.5 text-[12.5px] leading-[1.5] outline-none focus:shadow-focus"
+        style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }}
+      />
+      <button
+        type="button"
+        disabled={!can && live}
+        className="tv-pill h-[38px] w-full justify-center gap-2 text-[13px] transition-colors"
+        style={{
+          background: can ? "var(--color-coral)" : "var(--color-line-soft)",
+          color: can ? "#ffffff" : "var(--color-ink-faint)",
+          cursor: can ? "pointer" : "not-allowed",
+        }}
+        title={live ? undefined : "Collega il canale nelle impostazioni per pubblicare da qui"}
+      >
+        <Send size={14} strokeWidth={2.2} />
+        {label}
+      </button>
+    </section>
+  );
+}

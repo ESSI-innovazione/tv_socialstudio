@@ -4,12 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormatId } from "@/lib/brand";
 import { mockScript, startMockRun } from "@/lib/mock-run";
 import { applyEvent } from "@/lib/run-events";
-import { SAMPLE_ATTACHMENTS, SAMPLE_INSTRUCTION } from "@/lib/seed-data";
+import { SAMPLE_ATTACHMENTS } from "@/lib/seed-data";
 import type { Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
-import { LeftRail } from "./left-rail";
 import { Results } from "./results";
 import { RightRail } from "./right-rail";
 import { RunMonitor } from "./run-monitor";
@@ -32,23 +31,17 @@ interface Props {
  * Il prodotto e' una pagina sola. Qui vive la macchina a stati:
  * composing -> running -> results, senza mai cambiare rotta.
  */
-export function StudioShell({
-  user,
-  tools,
-  campaigns,
-  templates,
-  recentRuns,
-  initialRun,
-  channelsLive,
-  figmaSyncedAt,
-}: Props) {
+export function StudioShell({ user, tools, campaigns, templates, recentRuns, initialRun, channelsLive, figmaSyncedAt }: Props) {
   const restorable = initialRun && initialRun.variants.length > 0 ? initialRun : null;
 
   const [state, setState] = useState<RunState>(restorable ? restorable.state : "composing");
   const [run, setRun] = useState<Run | null>(restorable);
   const [selected, setSelected] = useState(0);
 
-  const [instruction, setInstruction] = useState(SAMPLE_INSTRUCTION);
+  // Si parte da zero: lo strumento scelto al passo 1 porta il suo brief e i suoi formati.
+  const [instruction, setInstruction] = useState("");
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [formats, setFormats] = useState<FormatId[]>([]);
 
   /**
    * Il visual scelto per la campagna. Vive qui e non nel selettore, perche'
@@ -57,18 +50,9 @@ export function StudioShell({
    */
   const [image, setImage] = useState<ImageChoice | null>(null);
   const [attachments] = useState(SAMPLE_ATTACHMENTS);
-  const [formats, setFormats] = useState<FormatId[]>([
-    "poster-a4",
-    "linkedin",
-    "ig-feed",
-    "ig-story",
-  ]);
   const [variantCount, setVariantCount] = useState(3);
   const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
-  const [campaignId, setCampaignId] = useState<string | null>(
-    campaigns.find((c) => c.active)?.id ?? campaigns[0]?.id ?? null,
-  );
-  const [activeTool, setActiveTool] = useState<string | null>("poster-bando");
+  const [campaignId, setCampaignId] = useState<string | null>(campaigns.find((c) => c.active)?.id ?? campaigns[0]?.id ?? null);
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearTimers = useCallback(() => {
@@ -77,14 +61,15 @@ export function StudioShell({
   }, []);
   useEffect(() => clearTimers, [clearTimers]);
 
-  const toggleFormat = (f: FormatId) =>
-    setFormats((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+  const toggleFormat = (f: FormatId) => setFormats((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
   const pickTool = (slug: string) => {
     setActiveTool(slug);
     const tool = tools.find((t) => t.slug === slug);
     if (!tool || tool.automatic) return;
-    setInstruction(tool.prompt_template);
+    // Il brief dello strumento e' un canovaccio: non sovrascrive quello che
+    // si e' gia' scritto.
+    if (!instruction.trim()) setInstruction(tool.prompt_template);
     if (tool.default_formats.length > 0) setFormats(tool.default_formats);
   };
 
@@ -117,28 +102,16 @@ export function StudioShell({
             if (!prev) return prev;
             const next = applyEvent(prev, event);
             // Il visual scelto a mano vince su quello proposto dal brief.
-            return image && next.brief
-              ? { ...next, brief: { ...next.brief, photo: image.url } }
-              : next;
+            return image && next.brief ? { ...next, brief: { ...next.brief, photo: image.url } } : next;
           });
           if (event.type === "state") {
             const ms = Date.now() - began;
-            setRun((prev) =>
-              prev
-                ? { ...prev, finished_at: new Date().toISOString(), duration_ms: ms }
-                : prev,
-            );
+            setRun((prev) => (prev ? { ...prev, finished_at: new Date().toISOString(), duration_ms: ms } : prev));
             setState(event.state);
           }
         }, at),
       );
     }
-  };
-
-  const cancel = () => {
-    clearTimers();
-    setRun(null);
-    setState("composing");
   };
 
   const reset = () => {
@@ -147,44 +120,25 @@ export function StudioShell({
     setState("composing");
   };
 
+  /** Cambio di fotografia dall'editor: vale per tutte le varianti dell'esecuzione. */
+  const setPhoto = (photo: string) =>
+    setRun((prev) => (prev?.brief ? { ...prev, brief: { ...prev.brief, photo } } : prev));
+
   const editVariant = (index: number, patch: Partial<VariantCopy>) =>
-    setRun((prev) =>
-      prev
-        ? {
-            ...prev,
-            variants: prev.variants.map((v) => (v.index === index ? { ...v, ...patch } : v)),
-          }
-        : prev,
-    );
+    setRun((prev) => (prev ? { ...prev, variants: prev.variants.map((v) => (v.index === index ? { ...v, ...patch } : v)) } : prev));
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <TopBar
-        user={user}
-        campaigns={campaigns}
-        campaignId={campaignId}
-        onCampaign={setCampaignId}
-        figmaSyncedAt={figmaSyncedAt}
-        brandKit="Brand Kit 2026"
-      />
+      <TopBar user={user} campaigns={campaigns} campaignId={campaignId} onCampaign={setCampaignId} figmaSyncedAt={figmaSyncedAt} brandKit="Brand Kit 2026" />
 
       <div className="flex min-h-0 flex-1">
-        <LeftRail
-          tools={tools}
-          campaigns={campaigns}
-          campaignId={campaignId}
-          activeTool={activeTool}
-          onTool={pickTool}
-          onCampaign={setCampaignId}
-          pendingApprovals={0}
-        />
-
         <main className="tv-scroll min-w-0 flex-1 overflow-y-auto">
           {state === "composing" ? (
             <Composer
               instruction={instruction}
               onInstruction={setInstruction}
               imageId={image?.id ?? null}
+              imageLabel={image?.label ?? null}
               onImage={setImage}
               attachments={[...attachments]}
               formats={formats}
@@ -202,7 +156,7 @@ export function StudioShell({
             />
           ) : null}
 
-          {state === "running" && run ? <RunMonitor run={run} onCancel={cancel} /> : null}
+          {state === "running" && run ? <RunMonitor run={run} onCancel={reset} /> : null}
 
           {state === "results" && run ? (
             <Results
@@ -210,7 +164,10 @@ export function StudioShell({
               selected={selected}
               onSelect={setSelected}
               onEdit={editVariant}
+              onPhoto={setPhoto}
               onReset={reset}
+              user={user}
+              channelsLive={channelsLive}
             />
           ) : null}
         </main>
@@ -219,6 +176,7 @@ export function StudioShell({
           state={state}
           formats={formats}
           variantCount={variantCount}
+          photoUrl={image?.url ?? null}
           run={run}
           selected={selected}
           user={user}
