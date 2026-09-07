@@ -130,6 +130,12 @@ export interface ImageChoice {
   style?: VisualStyle
   seed?: number | null
   engine?: VisualEngine
+  /**
+   * Solo sui generati: vero quando e' stato tenuto in archivio. Un visual
+   * appena generato nasce con falso e resta in questa sessione finche'
+   * qualcuno non lo salva.
+   */
+  saved?: boolean
 }
 
 /**

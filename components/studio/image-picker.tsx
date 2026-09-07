@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, ImageIcon, Loader2, Maximize2, RefreshCw, Sparkles, TriangleAlert, X } from "lucide-react";
+import {
+  BookmarkCheck,
+  BookmarkPlus,
+  Check,
+  ImageIcon,
+  Loader2,
+  Maximize2,
+  RefreshCw,
+  Sparkles,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { DEFAULT_STYLE, STYLES } from "@/lib/integrations/visual-styles";
 import type { ImageChoice, ImagePurpose, VisualEngine, VisualStyle } from "@/lib/integrations/types";
 
@@ -15,6 +26,10 @@ import type { ImageChoice, ImagePurpose, VisualEngine, VisualStyle } from "@/lib
  * Il visual entra nella campagna solo quando lo si seleziona. E quando non
  * convince, «rigenera» ne rifa' una variante con lo stesso prompt: e' la via
  * normale per cambiare immagine, molto piu' corta che riscrivere la richiesta.
+ *
+ * Generare non e' archiviare. Un visual appena fatto resta in questa sessione:
+ * si puo' usare subito, ma fra quelli proposti a tutti entra solo se qualcuno
+ * lo salva. Prima ogni tentativo finiva in archivio, scarti compresi.
  */
 
 export interface ImagePickerProps {
@@ -49,6 +64,8 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
   const [fresh, setFresh] = useState<string | null>(null);
   /** Il visual aperto a grandezza piena. Scegliere alla cieca da 92px non si puo'. */
   const [preview, setPreview] = useState<ImageChoice | null>(null);
+  /** L'id del visual che si sta salvando in archivio, per lo spinner. */
+  const [saving, setSaving] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,11 +162,53 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
     [busy, send],
   );
 
+  /**
+   * Tenere un visual. Quello appena generato vive solo in questa sessione:
+   * da qui in poi lo ritrova chiunque apra l'archivio.
+   */
+  const save = useCallback(
+    async (choice: ImageChoice) => {
+      if (saving || choice.saved) return;
+
+      setSaving(choice.id);
+      setError(null);
+      try {
+        const response = await fetch(`/api/images/${encodeURIComponent(choice.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ saved: true }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          setError(data.error ?? "Salvataggio non riuscito.");
+          return;
+        }
+
+        setCatalogue((current) =>
+          current
+            ? {
+                ...current,
+                generated: current.generated.map((g) => (g.id === choice.id ? { ...g, saved: true } : g)),
+              }
+            : current,
+        );
+        setPreview((current) => (current && current.id === choice.id ? { ...current, saved: true } : current));
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Salvataggio non riuscito.");
+      } finally {
+        setSaving(null);
+      }
+    },
+    [saving],
+  );
+
   /** Il motore che verra' davvero usato: la scelta, o il default d'ambiente. */
   const current: VisualEngine = engine ?? catalogue?.engine ?? "flux";
 
   const all = [...(catalogue?.generated ?? []), ...(catalogue?.archive ?? [])];
   const selected = all.find((c) => c.id === selectedId) ?? null;
+  /** L'ultimo arrivato, finche' e' ancora da decidere: tenerlo o no. */
+  const freshChoice = catalogue?.generated.find((c) => c.id === fresh) ?? null;
 
   return (
     <section>
@@ -159,7 +218,9 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
           {selected
             ? selected.origin === "archive"
               ? `dall'archivio · ${selected.label}`
-              : "visual generato · passa sopra la miniatura per rigenerarlo"
+              : selected.saved
+                ? "visual generato · passa sopra la miniatura per rigenerarlo"
+                : "visual generato, non in archivio · salvalo per ritrovarlo"
             : "l'archivio aziendale è la prima scelta"}
         </span>
       </div>
@@ -216,11 +277,14 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
               />
               {choice.origin === "generated" ? (
                 <span
-                  className="absolute top-1 left-1 flex h-[16px] items-center gap-1 rounded-[5px] px-1 text-[9px] font-semibold"
-                  style={{ background: "rgba(114,0,38,.82)", color: "#ffffff" }}
+                  className="absolute top-1 left-1 flex h-[16px] items-center gap-1 rounded-[5px] px-1 text-[9px] font-semibold transition-opacity group-hover:opacity-0"
+                  style={{
+                    background: choice.saved ? "rgba(114,0,38,.82)" : "rgba(255,127,81,.92)",
+                    color: "#ffffff",
+                  }}
                 >
                   <Sparkles size={9} strokeWidth={2.4} />
-                  generato
+                  {choice.saved ? "generato" : "non salvato"}
                 </span>
               ) : null}
               {on ? (
@@ -257,6 +321,35 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                 </span>
               ) : null}
 
+              {/* Tenere il visual: il generato nasce fuori dall'archivio. */}
+              {choice.origin === "generated" && !choice.saved ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Salva nell'archivio"
+                  title="Salva nell'archivio: resta disponibile per le prossime campagne"
+                  aria-busy={saving === choice.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void save(choice);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.stopPropagation();
+                      void save(choice);
+                    }
+                  }}
+                  className="absolute bottom-1 left-[26px] flex h-[18px] w-[18px] items-center justify-center rounded-[5px] opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ background: "var(--color-coral)", color: "#ffffff" }}
+                >
+                  {saving === choice.id ? (
+                    <Loader2 size={10} strokeWidth={2.4} className="tv-anim-spin" />
+                  ) : (
+                    <BookmarkPlus size={10} strokeWidth={2.4} />
+                  )}
+                </span>
+              ) : null}
+
               {/* Ingrandire non e' scegliere: sono due gesti diversi. */}
               <span
                 role="button"
@@ -288,6 +381,62 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
           </p>
         ) : null}
       </div>
+
+      {/* --------- l'ultimo generato: tenerlo o no --------- */}
+      {freshChoice && !busy ? (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2.5 rounded-[10px] px-3 py-2.5"
+          style={{
+            background: freshChoice.saved ? "var(--color-success-bg)" : "var(--color-warm-tint)",
+            color: freshChoice.saved ? "var(--color-success)" : "var(--color-warning)",
+          }}
+        >
+          {freshChoice.saved ? (
+            <>
+              <BookmarkCheck size={14} strokeWidth={2.2} className="shrink-0" />
+              <span className="flex-1 text-[12px] leading-[1.45]">
+                Visual salvato nell&apos;archivio: lo ritrovi anche nelle prossime campagne.
+              </span>
+            </>
+          ) : (
+            <>
+              <Sparkles size={14} strokeWidth={2.2} className="shrink-0" />
+              <span className="min-w-[200px] flex-1 text-[12px] leading-[1.45]">
+                Visual pronto. Puoi usarlo subito, ma resta solo in questa sessione: salvalo se
+                vuoi ritrovarlo in archivio.
+              </span>
+              <button
+                type="button"
+                onClick={() => void save(freshChoice)}
+                disabled={saving === freshChoice.id}
+                className="tv-pill h-[30px] gap-1.5 px-3 text-[12px] transition-colors"
+                style={{
+                  background: "var(--color-coral)",
+                  color: "#ffffff",
+                  cursor: saving === freshChoice.id ? "wait" : "pointer",
+                }}
+              >
+                {saving === freshChoice.id ? (
+                  <Loader2 size={13} strokeWidth={2.4} className="tv-anim-spin" />
+                ) : (
+                  <BookmarkPlus size={13} strokeWidth={2.4} />
+                )}
+                Salva nell&apos;archivio
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {error && !open ? (
+        <p
+          className="mt-2 flex items-start gap-1.5 rounded-[8px] px-2.5 py-2 text-[11.5px] leading-[1.45]"
+          style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}
+        >
+          <TriangleAlert size={13} strokeWidth={2} className="mt-px shrink-0" />
+          {error}
+        </p>
+      ) : null}
 
       {/* --------- generare un visual nuovo --------- */}
       <div className="pt-3">
@@ -534,6 +683,36 @@ export function ImagePicker({ selectedId, onSelect, purpose }: ImagePickerProps)
                   <RefreshCw size={14} strokeWidth={2.2} className={busy ? "tv-anim-spin" : undefined} />
                   Rigenera
                 </button>
+              ) : null}
+              {preview.origin === "generated" && !preview.saved ? (
+                <button
+                  type="button"
+                  onClick={() => void save(preview)}
+                  disabled={saving === preview.id}
+                  title="Resta disponibile per le prossime campagne"
+                  className="tv-pill h-[36px] gap-2 px-4 text-[13px]"
+                  style={{
+                    border: "1px solid var(--color-coral)",
+                    color: "var(--color-coral)",
+                    cursor: saving === preview.id ? "wait" : "pointer",
+                  }}
+                >
+                  {saving === preview.id ? (
+                    <Loader2 size={14} strokeWidth={2.2} className="tv-anim-spin" />
+                  ) : (
+                    <BookmarkPlus size={14} strokeWidth={2.2} />
+                  )}
+                  Salva nell&apos;archivio
+                </button>
+              ) : null}
+              {preview.origin === "generated" && preview.saved ? (
+                <span
+                  className="tv-pill h-[36px] gap-2 px-3 text-[12.5px]"
+                  style={{ background: "var(--color-success-bg)", color: "var(--color-success)" }}
+                >
+                  <BookmarkCheck size={14} strokeWidth={2.2} />
+                  In archivio
+                </span>
               ) : null}
               <div className="flex-1" />
               <button

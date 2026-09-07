@@ -26,6 +26,11 @@ export interface ImageRow {
   model?: string | null;
   /** Il seme: senza, una variante riuscita non si sa piu' rifare. */
   seed?: number | null;
+  /**
+   * Vero quando qualcuno ha tenuto il visual. Generare non e' archiviare:
+   * la riga si scrive sempre, ma solo le salvate tornano nell'archivio.
+   */
+  saved: boolean;
   created_at: string;
 }
 
@@ -63,6 +68,28 @@ export async function recordImage(row: Omit<ImageRow, "created_at">): Promise<vo
   if (error) console.error("[db-images] record", error.message);
 }
 
+/**
+ * Tiene, o toglie, un visual dall'archivio. Restituisce falso se la riga
+ * non esiste: chi chiama deve poterlo dire, invece di fingere un salvataggio.
+ */
+export async function markImageSaved(id: string, saved: boolean): Promise<boolean> {
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().find((r) => r.id === id);
+    if (!row) return false;
+    row.saved = saved;
+    return true;
+  }
+
+  const { data, error } = await supabase.from(TABLE).update({ saved }).eq("id", id).select("id");
+  if (error) {
+    console.error("[db-images] save", error.message);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+/** Quante generazioni nelle ultime 24 ore, salvate o no: il freno conta i tentativi. */
 export async function countImagesLastDay(): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -81,13 +108,15 @@ export async function countImagesLastDay(): Promise<number> {
   return count ?? 0;
 }
 
+/** I visual tenuti in archivio, dal piu' recente. Le generazioni non salvate non ci sono. */
 export async function listRecentImages(limit = 12): Promise<ImageRow[]> {
   const supabase = db();
-  if (!supabase) return memory().slice(0, limit);
+  if (!supabase) return memory().filter((r) => r.saved).slice(0, limit);
 
   const { data, error } = await supabase
     .from(TABLE)
     .select("*")
+    .eq("saved", true)
     .order("created_at", { ascending: false })
     .limit(limit);
 

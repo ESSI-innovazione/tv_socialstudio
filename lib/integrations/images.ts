@@ -1,6 +1,6 @@
 import { PHOTOS } from "../brand";
 import { objectStore } from "../storage";
-import { recordImage, countImagesLastDay, listRecentImages } from "../db-images";
+import { recordImage, countImagesLastDay, listRecentImages, markImageSaved } from "../db-images";
 import { env } from "../env";
 import { generateBytes } from "./flux";
 import { generateWithGamma } from "./gamma-visual";
@@ -102,11 +102,15 @@ export const imageSource: ImageSource = {
       seed: produced.seed,
       engine,
       createdAt: new Date().toISOString(),
+      saved: false,
     };
 
     // La provenienza si registra sempre: un visual generato deve poter dire
     // da quale richiesta è nato, come ogni altro asset. Stile e seme in piu',
     // perché senza quei due una variante non si sa piu' rifare.
+    //
+    // Registrare pero' non e' archiviare. Il visual nasce non salvato: sta
+    // nella sessione di chi l'ha chiesto, e torna a tutti solo se lo tiene.
     await recordImage({
       id: choice.id,
       stored_path: stored.path,
@@ -119,6 +123,7 @@ export const imageSource: ImageSource = {
       credits_used: produced.creditsUsed ?? null,
       model: produced.model,
       seed: produced.seed,
+      saved: false,
     });
 
     return choice;
@@ -150,6 +155,14 @@ export async function regenerate(
   });
 }
 
+/**
+ * Tiene un visual generato, o lo toglie dall'archivio. Il file non si tocca:
+ * una campagna che lo usa deve continuare a trovarlo.
+ */
+export async function saveGenerated(id: string, saved: boolean): Promise<boolean> {
+  return markImageSaved(id, saved);
+}
+
 /** Il motore da usare: quello chiesto, o quello configurato. */
 export function pickEngine(asked?: VisualEngine): VisualEngine {
   if (asked === "gamma") return env.gammaApiKey ? "gamma" : "flux";
@@ -179,5 +192,6 @@ export async function recentGenerated(limit = 12): Promise<ImageChoice[]> {
     style: row.style as VisualStyle,
     seed: row.seed ?? undefined,
     createdAt: row.created_at,
+    saved: row.saved,
   }));
 }
