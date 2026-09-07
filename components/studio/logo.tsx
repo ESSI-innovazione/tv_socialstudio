@@ -23,13 +23,13 @@ export function Wordmark({ color = "#ffffff" }: { color?: string }) {
       <LogoMark size={24} color={color} />
       <span className="flex flex-col leading-none">
         <span className="text-[14px] font-extrabold tracking-[-0.01em]" style={{ color }}>
-          Time Vision
+          TV Social Studio
         </span>
         <span
           className="mt-[3px] text-[9px] font-semibold tracking-[0.16em] uppercase"
           style={{ color, opacity: 0.72 }}
         >
-          Marketing Studio
+          Time Vision
         </span>
       </span>
     </span>

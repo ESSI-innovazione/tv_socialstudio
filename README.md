@@ -1,4 +1,4 @@
-# Time Vision Marketing Studio
+# TV Social Studio
 
 App interna per il team marketing di Time Vision. Dal brief al post pubblicato, in una pagina sola.
 

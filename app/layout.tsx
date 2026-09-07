@@ -21,7 +21,7 @@ const montserrat = Montserrat({ subsets: ["latin"], weight: ["400", "600", "700"
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600", "700", "800"], variable: "--font-playfair", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Time Vision Marketing Studio",
+  title: "TV Social Studio · Time Vision",
   description:
     "Dal brief al post pubblicato. L'agente creativo del team marketing Time Vision: poster, cataloghi, visual 3D e post social sempre in brand.",
   robots: { index: false, follow: false },

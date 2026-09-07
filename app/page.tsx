@@ -41,10 +41,10 @@ export default async function LoginPage({
               </span>
               <span className="flex flex-col leading-none">
                 <span className="text-[15px] font-extrabold tracking-[-0.01em] text-white">
-                  Time Vision
+                  TV Social Studio
                 </span>
                 <span className="mt-[4px] text-[9px] font-semibold uppercase tracking-[0.16em] text-on-wine">
-                  Marketing Studio
+                  Time Vision
                 </span>
               </span>
             </div>

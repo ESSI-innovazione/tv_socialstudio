@@ -77,7 +77,7 @@ export function DynamicHero({
   nav = [],
   media,
   status,
-  brand = { name: "TIME VISION", sub: "MARKETING STUDIO" },
+  brand = { name: "TV SOCIAL STUDIO", sub: "TIME VISION" },
 }: DynamicHeroProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLAnchorElement>(null);
