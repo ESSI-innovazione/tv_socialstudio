@@ -23,12 +23,14 @@ const nextConfig: NextConfig = {
       "./node_modules/ffmpeg-static/ffmpeg",
       "./assets/fonts/**",
       "./assets/audio/**",
+      "./public/brand/*.jpg",
     ],
     "/api/videos/**": [
       "./node_modules/@sparticuz/chromium/bin/**",
       "./node_modules/ffmpeg-static/ffmpeg",
       "./assets/fonts/**",
       "./assets/audio/**",
+      "./public/brand/*.jpg",
     ],
   },
 };

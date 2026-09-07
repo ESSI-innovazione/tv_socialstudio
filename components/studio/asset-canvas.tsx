@@ -351,7 +351,7 @@ function justify(align: Block["align"]): string {
  * nostro, se e' stato generato e riospitato. Distinguere serve qui e basta.
  */
 function photoSrc(photo: string, baseUrl: string): string {
-  if (photo.startsWith("http")) return photo;
+  if (photo.startsWith("http") || photo.startsWith("data:")) return photo;
   if (photo.startsWith("/")) return `${baseUrl}${photo}`;
   return `${baseUrl}/brand/${photo}`;
 }
