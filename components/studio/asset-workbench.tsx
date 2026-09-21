@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -68,13 +68,29 @@ interface Props {
 type Panel = "testo" | "foto" | "esporta" | "pubblica";
 type FileType = "png" | "mp4" | "pdf" | "svg" | "pptx";
 
-/** Larghezza della tela per formato: il landscape ha bisogno di respiro. */
+/** Larghezza minima della tela per formato: il landscape ha bisogno di respiro. */
 const CANVAS_WIDTH: Record<FormatId, number> = {
   linkedin: 720,
   "ig-feed": 520,
   "poster-a4": 430,
   "ig-story": 330,
 };
+
+/** Oltre questa larghezza la tela smette di crescere: i testi diventerebbero cartelloni. */
+const CANVAS_MAX_WIDTH = 1100;
+
+/**
+ * Spazio che la card sottrae alla tela: padding dell'area (p-8) e della card
+ * (p-5) piu' il pannello delle proprieta' a fianco (min 212 px + gap 16).
+ */
+const CANVAS_CHROME = 64 + 40 + 228;
+
+/** La tela riempie l'area di lavoro, senza scendere sotto il minimo del formato. */
+function canvasWidthFor(format: FormatId, areaWidth: number | null): number {
+  const min = CANVAS_WIDTH[format];
+  if (areaWidth === null) return min;
+  return Math.max(min, Math.min(CANVAS_MAX_WIDTH, Math.floor(areaWidth - CANVAS_CHROME)));
+}
 
 /**
  * L'editor a tutto schermo: la tela al centro, gli strumenti a sinistra, il
@@ -106,6 +122,17 @@ export function AssetWorkbench({
   onClose,
 }: Props) {
   const [panel, setPanel] = useState<Panel>("testo");
+
+  const areaRef = useRef<HTMLElement>(null);
+  const [areaWidth, setAreaWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setAreaWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -193,9 +220,9 @@ export function AssetWorkbench({
         </nav>
 
         {/* ---------------- tela ---------------- */}
-        <main className="tv-scroll flex min-w-0 flex-1 items-start justify-center overflow-auto p-8">
-          <div id="workbench-layers" className="tv-card p-5">
-            <AssetEditor copy={variant} layout={layout} archetype={archetype} photo={photo} onChange={onLayoutChange} width={CANVAS_WIDTH[format]} />
+        <main ref={areaRef} className="tv-scroll flex min-w-0 flex-1 items-start justify-center overflow-auto p-8">
+          <div id="workbench-layers" className="tv-card w-full p-5">
+            <AssetEditor copy={variant} layout={layout} archetype={archetype} photo={photo} onChange={onLayoutChange} width={canvasWidthFor(format, areaWidth)} />
           </div>
         </main>
 
