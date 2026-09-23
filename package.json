@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test:layout": "tsc lib/layout-model.ts lib/brand.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck && node scripts/layout-model.test.cjs",
