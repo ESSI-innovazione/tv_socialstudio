@@ -1,9 +1,8 @@
 import { readJson, requireCan } from "@/lib/admin";
 import { createProfile, getProfileByEmail, listProfiles, logProfileEvent } from "@/lib/db";
 import { ALLOWED_EMAIL_DOMAIN, env } from "@/lib/env";
-import { sendMail } from "@/lib/mail";
-import { isRole, ROLE_LABEL } from "@/lib/permissions";
-import type { Profile } from "@/lib/types";
+import { sendInvite } from "@/lib/invites";
+import { isRole } from "@/lib/permissions";
 
 /**
  * Il team: elenco e invito di un collega. Solo l'indirizzo aziendale
@@ -17,19 +16,6 @@ export async function GET() {
   const gate = await requireCan("manageTeam");
   if ("response" in gate) return gate.response;
   return Response.json({ profiles: await listProfiles() });
-}
-
-/** L'email di invito. Torna se e' partita davvero. */
-export async function sendInvite(profile: Profile, inviter: string): Promise<boolean> {
-  const result = await sendMail({
-    to: [profile.email],
-    subject: "Sei nel team di TV Social Studio",
-    text: [
-      `${inviter} ti ha aggiunto a TV Social Studio, lo studio del marketing Time Vision, come ${ROLE_LABEL[profile.role].toLowerCase()}${profile.is_admin ? " e admin" : ""}.`,
-      `\nEntra con il tuo account Google @${ALLOWED_EMAIL_DOMAIN}: ${env.siteUrl}`,
-    ].join("\n"),
-  });
-  return result.sent;
 }
 
 export async function POST(request: Request) {

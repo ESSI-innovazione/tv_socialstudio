@@ -1,7 +1,7 @@
 import { requireCan } from "@/lib/admin";
 import { getProfileById, updateProfile } from "@/lib/db";
 import { env } from "@/lib/env";
-import { sendInvite } from "../../route";
+import { sendInvite } from "@/lib/invites";
 
 /**
  * Rimanda l'invito a chi non e' ancora entrato. Il profilo c'e' gia': si

@@ -1,5 +1,6 @@
 import type { FormatId } from "./brand";
 import type { AssetLayout } from "./layout-model";
+import type { ToolField } from "./tool-fields";
 
 /* ------------------------------------------------------------------ */
 /* Ruoli e profili                                                      */
@@ -47,6 +48,8 @@ export type ToolSlug =
   | "figma-sync"
   | "brand-guard";
 
+export type ToolCategory = "social" | "stampa";
+
 export interface Tool {
   id: string;
   slug: string;
@@ -54,6 +57,16 @@ export interface Tool {
   description: string;
   /** Template dell'istruzione, con segnaposto {{campo}}. Editabile dal marketing. */
   prompt_template: string;
+  /** Le domande del modulo, una per segnaposto. Vedi lib/tool-fields.ts. */
+  fields: ToolField[];
+  /** L'etichetta del pulsante che avvia lo strumento, es. «Crea il poster». */
+  cta_label: string | null;
+  /** Una foto dell'archivio per la card nella home. */
+  cover_image: string | null;
+  category: ToolCategory | null;
+  estimated_minutes: number | null;
+  /** La versione che il team usa. Le bozze stanno in tool_versions. */
+  published_version: number;
   default_formats: FormatId[];
   /** Contatore di esecuzioni, oppure una nota tipo "automatico a ogni esecuzione". */
   run_count: number;
@@ -61,6 +74,20 @@ export interface Tool {
   /** Gli strumenti di sistema non compaiono come lanciabili a mano. */
   automatic: boolean;
   position: number;
+}
+
+/** Quello che di uno strumento si versiona: cio' che il team vede e usa. */
+export type ToolSnapshot = Pick<Tool, "title" | "description" | "prompt_template" | "fields" | "cta_label" | "default_formats" | "category" | "estimated_minutes" | "cover_image">;
+
+export interface ToolVersion {
+  id: string;
+  tool_id: string;
+  version: number;
+  snapshot: ToolSnapshot;
+  created_by: string | null;
+  created_at: string;
+  /** Null finche' e' una bozza. */
+  published_at: string | null;
 }
 
 /* ------------------------------------------------------------------ */

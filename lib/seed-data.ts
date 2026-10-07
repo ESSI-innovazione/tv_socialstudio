@@ -12,6 +12,19 @@ const CAMPAIGNS: Campaign[] = [
   { id: "cam-donna", name: "Donna in Progress", slug: "donna-in-progress", active: false },
 ];
 
+/** Le chiamate all'azione piu' frequenti: la scelta nel modulo, modificabile dall'editor degli strumenti. */
+const CTA_OPTIONS = ["Scopri il voucher", "Prenota una consulenza gratuita", "Iscriviti al corso", "Scarica la scheda", "Contattaci"];
+
+/** Gli strumenti di sistema non hanno un modulo: niente campi, niente pulsante. */
+const AUTOMATIC: Pick<Tool, "fields" | "cta_label" | "cover_image" | "category" | "estimated_minutes" | "published_version"> = {
+  fields: [],
+  cta_label: null,
+  cover_image: null,
+  category: null,
+  estimated_minutes: null,
+  published_version: 1,
+};
+
 const TOOLS: Tool[] = [
   {
     id: "tool-poster",
@@ -20,6 +33,17 @@ const TOOLS: Tool[] = [
     description: "Poster A4 per bandi e finanziamenti, con countdown e disclaimer normativo",
     prompt_template:
       "Costruisci un poster A4 per il bando {{bando}}. Metti in evidenza il countdown alla scadenza {{scadenza}} e chiudi con il disclaimer normativo obbligatorio. Tono istituzionale e diretto, destinatario {{target}}. CTA: {{cta}}.",
+    fields: [
+      { key: "bando", label: "Il bando", type: "text", required: true, example: "Voucher Cloud e Cybersecurity MIMIT" },
+      { key: "scadenza", label: "La scadenza", type: "datetime", required: true, example: "2026-11-10T12:00" },
+      { key: "target", label: "A chi si rivolge", type: "text", required: true, example: "imprenditori e titolari di PMI" },
+      { key: "cta", label: "Chiamata all'azione", type: "choice_link", required: true, example: "Scopri il voucher", options: CTA_OPTIONS },
+    ],
+    cta_label: "Crea il poster",
+    cover_image: "tv-fondi.jpg",
+    category: "stampa",
+    estimated_minutes: 3,
+    published_version: 1,
     default_formats: ["poster-a4"],
     run_count: 34,
     note: null,
@@ -33,6 +57,16 @@ const TOOLS: Tool[] = [
     description: "Catalogo PDF multipagina costruito dai servizi selezionati",
     prompt_template:
       "Costruisci un catalogo PDF multipagina dai servizi {{servizi}}. Una pagina di copertina, una pagina per servizio, una pagina di contatto. Tono {{tono}}, destinatario {{target}}.",
+    fields: [
+      { key: "servizi", label: "I servizi da includere", type: "longtext", required: true, example: "Consulenza per bandi e finanza agevolata\nFormazione finanziata\nAcademy e master" },
+      { key: "tono", label: "Il tono", type: "choice", required: true, example: "istituzionale", options: ["istituzionale", "diretto", "caldo"] },
+      { key: "target", label: "A chi si rivolge", type: "text", required: false, example: "imprese e professionisti" },
+    ],
+    cta_label: "Crea il catalogo",
+    cover_image: "tv-consulenza.jpg",
+    category: "stampa",
+    estimated_minutes: 5,
+    published_version: 1,
     default_formats: ["poster-a4"],
     run_count: 9,
     note: null,
@@ -46,6 +80,12 @@ const TOOLS: Tool[] = [
     description: "Key visual 3D e mockup a partire da un concept testuale",
     prompt_template:
       "Genera un key visual 3D dal concept {{concept}}. Rendi disponibili i mockup nei formati richiesti. Palette istituzionale, nessun colore fuori brand.",
+    fields: [{ key: "concept", label: "Il concept", type: "longtext", required: true, example: "Una nuvola di dati che protegge una piccola impresa" }],
+    cta_label: "Genera il visual",
+    cover_image: "tv-digitale.jpg",
+    category: "social",
+    estimated_minutes: 2,
+    published_version: 1,
     default_formats: ["linkedin", "ig-feed"],
     run_count: 6,
     note: null,
@@ -59,6 +99,15 @@ const TOOLS: Tool[] = [
     description: "LinkedIn, IG feed e story dallo stesso layout, con caption già scritte",
     prompt_template:
       "Declina {{argomento}} in LinkedIn 1200x627, Instagram feed 1080x1080 e story 1080x1920 dallo stesso impianto. Scrivi anche le caption per canale. CTA: {{cta}}.",
+    fields: [
+      { key: "argomento", label: "L'argomento", type: "text", required: true, example: "Corsi gratuiti CIG Puglia, indennita' 2.400 euro" },
+      { key: "cta", label: "Chiamata all'azione", type: "choice_link", required: true, example: "Iscriviti al corso", options: CTA_OPTIONS },
+    ],
+    cta_label: "Crea il kit",
+    cover_image: "tv-network.jpg",
+    category: "social",
+    estimated_minutes: 3,
+    published_version: 1,
     default_formats: ["linkedin", "ig-feed", "ig-story"],
     run_count: 47,
     note: null,
@@ -72,6 +121,7 @@ const TOOLS: Tool[] = [
     description: "Importa i frame aggiornati dalla libreria Brand 2026 e li rende usabili",
     prompt_template:
       "Sincronizza la libreria Figma Time Vision Brand 2026 e aggiorna i template disponibili.",
+    ...AUTOMATIC,
     default_formats: [],
     run_count: 0,
     note: "ultima sincronizzazione da Figma",
@@ -85,6 +135,7 @@ const TOOLS: Tool[] = [
     description: "Verifica palette, font, logo e claim prima di ogni pubblicazione",
     prompt_template:
       "Verifica che palette, font, logo e claim siano conformi al Brand Kit e che ogni dato numerico abbia una fonte nei documenti allegati.",
+    ...AUTOMATIC,
     default_formats: [],
     run_count: 0,
     note: "automatico a ogni esecuzione",

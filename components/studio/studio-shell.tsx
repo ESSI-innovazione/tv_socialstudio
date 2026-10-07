@@ -6,14 +6,18 @@ import { mockScript, startMockRun } from "@/lib/mock-run";
 import { applyEvent } from "@/lib/run-events";
 import { SAMPLE_ATTACHMENTS } from "@/lib/seed-data";
 import type { AssetLayout } from "@/lib/layout-model";
+import type { HomeData } from "@/lib/home-data";
+import { can } from "@/lib/permissions";
 import type { ChannelStatus } from "@/lib/publish";
-import type { Asset, Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
+import type { Asset, Attachment, Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
 import { Results } from "./results";
 import { RightRail } from "./right-rail";
 import { RunMonitor } from "./run-monitor";
+import { ToolForm } from "./tool-form";
+import { ToolsHome } from "./tools-home";
 
 interface Props {
   user: StudioUser;
@@ -27,7 +31,16 @@ interface Props {
   initialRun: Run | null;
   /** Falso finche' le integrazioni girano sui mock. */
   channels: ChannelStatus;
+  /** Quello che la home mostra intorno agli strumenti. Assente sulla pagina di uno strumento. */
+  home?: HomeData | null;
+  /** Lo strumento aperto, su /studio/strumenti/[slug]: la composizione e' il suo modulo. */
+  tool?: Tool | null;
+  /** Valori gia' noti per il modulo, dall'indirizzo. */
+  prefill?: Record<string, string>;
 }
+
+/** Cosa mostra la composizione quando non c'e' uno strumento aperto. */
+type ComposeMode = "home" | "brief";
 
 /**
  * Il prodotto e' una pagina sola. Qui vive la macchina a stati:
@@ -39,12 +52,14 @@ interface Props {
  * Ogni ritocco al testo viene salvato poco dopo, cosi' lo storico e
  * l'archivio mostrano quello che si vede qui.
  */
-export function StudioShell({ user, tools, campaignId, templates, recentRuns, initialRun, channels }: Props) {
+export function StudioShell({ user, tools, campaigns, campaignId, templates, recentRuns, initialRun, channels, home = null, tool = null, prefill = {} }: Props) {
   const restorable = initialRun && initialRun.variants.length > 0 ? initialRun : null;
 
   const [state, setState] = useState<RunState>(restorable ? restorable.state : "composing");
   const [run, setRun] = useState<Run | null>(restorable);
   const [selected, setSelected] = useState(0);
+  const [mode, setMode] = useState<ComposeMode>(home ? "home" : "brief");
+  const campaignName = campaigns.find((c) => c.id === campaignId)?.name ?? "Nessuna campagna";
 
   /**
    * Le impaginazioni ritoccate nell'editor, per chiave `variante:formato`.
@@ -66,10 +81,11 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
     });
   }, []);
 
-  // Si parte da zero: lo strumento scelto al passo 1 porta il suo brief e i suoi formati.
+  // Si parte da zero: lo strumento scelto al passo 1 porta il suo brief e i
+  // suoi formati. Con uno strumento aperto, i formati sono i suoi.
   const [instruction, setInstruction] = useState("");
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [formats, setFormats] = useState<FormatId[]>([]);
+  const [activeTool, setActiveTool] = useState<string | null>(tool?.slug ?? null);
+  const [formats, setFormats] = useState<FormatId[]>(tool?.default_formats ?? []);
 
   /**
    * Il visual scelto per la campagna. Vive qui e non nel selettore, perche'
@@ -77,7 +93,7 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
    * sugli asset.
    */
   const [image, setImage] = useState<ImageChoice | null>(null);
-  const [attachments] = useState(SAMPLE_ATTACHMENTS);
+  const [attachments, setAttachments] = useState<Attachment[]>(SAMPLE_ATTACHMENTS);
   const [variantCount, setVariantCount] = useState(3);
   const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
 
@@ -155,10 +171,10 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
    * Avvio dell'esecuzione. La riga nasce sul server, con l'utente della
    * sessione; poi il driver simulato la popola evento dopo evento.
    */
-  const start = async () => {
+  const start = async (composed: string = instruction) => {
     clearTimers();
     const input = {
-      instruction,
+      instruction: composed,
       formats,
       attachments: [...attachments],
       templateId,
@@ -184,6 +200,12 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
       ? { ...startMockRun(input), id: created.id, created_at: created.created_at }
       : startMockRun(input);
     if (!created) saved.current.add(fresh.id);
+
+    // L'indirizzo diventa quello della console con l'esecuzione: un refresh
+    // ripristina il lavoro, non la home o il modulo vuoto.
+    if (created && typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/studio?run=${created.id}`);
+    }
 
     edits.current = 0;
     setLayouts({});
@@ -215,7 +237,16 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
     clearTimers();
     setRun(null);
     setState("composing");
+    // «Nuova creazione» riporta alla home degli strumenti, che e' una
+    // lettura dal server: se qui non c'e', la si va a prendere.
+    if (!home && typeof window !== "undefined") window.location.assign("/studio");
   };
+
+  /** Senza strumento aperto, la composizione e' la home o il brief libero. */
+  const composing = state === "composing";
+  const showHome = composing && !tool && mode === "home" && home;
+  const showForm = composing && Boolean(tool);
+  const showRail = !(showHome || showForm);
 
   /** Cambio di fotografia dall'editor: vale per tutte le varianti dell'esecuzione. */
   const setPhoto = (photo: string) =>
@@ -227,8 +258,37 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden bg-canvas">
         <main className="tv-scroll min-w-0 flex-1 overflow-y-auto">
-          {state === "composing" ? (
+          {showHome ? <ToolsHome user={user} tools={tools} home={home} onFreeBrief={() => setMode("brief")} /> : null}
+
+          {showForm && tool ? (
+            <ToolForm
+              key={tool.id}
+              tool={tool}
+              campaignName={campaignName}
+              prefill={prefill}
+              templates={templates}
+              templateId={templateId}
+              onTemplate={setTemplateId}
+              formats={formats}
+              onToggleFormat={toggleFormat}
+              variantCount={variantCount}
+              onVariantCount={setVariantCount}
+              attachments={attachments}
+              onAttachments={setAttachments}
+              imageId={image?.id ?? null}
+              imageUrl={image?.url ?? null}
+              onImage={setImage}
+              canEditTool={can(user, "editTools")}
+              onRun={(composed) => {
+                setInstruction(composed);
+                void start(composed);
+              }}
+            />
+          ) : null}
+
+          {composing && !tool && mode === "brief" ? (
             <Composer
+              onHome={home ? () => setMode("home") : undefined}
               instruction={instruction}
               onInstruction={setInstruction}
               imageId={image?.id ?? null}
@@ -246,7 +306,7 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
               activeTool={activeTool}
               onTool={pickTool}
               recentRuns={recentRuns}
-              onRun={start}
+              onRun={() => void start()}
             />
           ) : null}
 
@@ -269,18 +329,20 @@ export function StudioShell({ user, tools, campaignId, templates, recentRuns, in
           ) : null}
         </main>
 
-        <RightRail
-          state={state}
-          formats={formats}
-          variantCount={variantCount}
-          photoUrl={image?.url ?? null}
-          run={run}
-          selected={selected}
-          user={user}
-          channels={channels}
-          layouts={layouts}
-          onAssets={mergeAssets}
-        />
+        {showRail ? (
+          <RightRail
+            state={state}
+            formats={formats}
+            variantCount={variantCount}
+            photoUrl={image?.url ?? null}
+            run={run}
+            selected={selected}
+            user={user}
+            channels={channels}
+            layouts={layouts}
+            onAssets={mergeAssets}
+          />
+        ) : null}
     </div>
   );
 }

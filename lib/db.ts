@@ -55,11 +55,20 @@ interface MemoryStore {
 }
 
 // Il modulo puo' essere rivalutato tra richieste: teniamo lo store sul globale.
-const globalStore = globalThis as unknown as { __tvStore?: MemoryStore };
+const globalStore = globalThis as unknown as { __tvStore?: MemoryStore; __tvStoreVersion?: number };
+
+/**
+ * La forma del seme. Quando cambia (una colonna nuova negli strumenti, una
+ * tabella in piu') lo store in memoria si rifa' da capo invece di servire
+ * righe vecchie a codice nuovo: in sviluppo il processo sopravvive ai
+ * salvataggi, e uno store stantio e' un errore difficile da riconoscere.
+ */
+const SEED_VERSION = 3;
 
 function memory(): MemoryStore {
-  if (!globalStore.__tvStore) {
+  if (!globalStore.__tvStore || globalStore.__tvStoreVersion !== SEED_VERSION) {
     globalStore.__tvStore = structuredClone(MEMORY_SEED);
+    globalStore.__tvStoreVersion = SEED_VERSION;
   }
   return globalStore.__tvStore;
 }
@@ -208,7 +217,7 @@ export async function updateProfile(
 /** Modifica uno strumento salvato: titolo, descrizione, istruzione, formati. */
 export async function updateTool(
   id: string,
-  patch: Partial<Pick<Tool, "title" | "description" | "prompt_template" | "default_formats">>,
+  patch: Partial<Omit<Tool, "id" | "slug" | "run_count" | "automatic">>,
 ): Promise<Tool | null> {
   const supabase = db();
   if (!supabase) {
@@ -227,19 +236,41 @@ export async function updateTool(
     console.error("[db] updateTool", error.message);
     return null;
   }
-  return (data as Tool) ?? null;
+  return data ? normalizeTool(data as Tool) : null;
+}
+
+/**
+ * Una riga della tabella tools com'era prima della migrazione 012 non ha i
+ * campi del modulo: qui prende i valori di partenza, cosi' la console non
+ * cade se la migrazione non e' ancora passata.
+ */
+function normalizeTool(row: Partial<Tool> & Pick<Tool, "id" | "slug" | "title" | "description" | "prompt_template">): Tool {
+  return {
+    ...row,
+    fields: Array.isArray(row.fields) ? row.fields : [],
+    cta_label: row.cta_label ?? null,
+    cover_image: row.cover_image ?? null,
+    category: row.category ?? null,
+    estimated_minutes: row.estimated_minutes ?? null,
+    published_version: row.published_version ?? 1,
+    default_formats: row.default_formats ?? [],
+    run_count: row.run_count ?? 0,
+    note: row.note ?? null,
+    automatic: row.automatic ?? false,
+    position: row.position ?? 0,
+  };
 }
 
 export async function getTools(): Promise<Tool[]> {
   const supabase = db();
-  if (!supabase) return [...memory().tools].sort((a, b) => a.position - b.position);
+  if (!supabase) return memory().tools.map(normalizeTool).sort((a, b) => a.position - b.position);
 
   const { data, error } = await supabase.from("tools").select("*").order("position");
   if (error || !data?.length) {
     if (error) console.error("[db] getTools", error.message);
-    return [...memory().tools].sort((a, b) => a.position - b.position);
+    return memory().tools.map(normalizeTool).sort((a, b) => a.position - b.position);
   }
-  return data as Tool[];
+  return (data as Tool[]).map(normalizeTool);
 }
 
 export async function getToolBySlug(slug: string): Promise<Tool | null> {
@@ -428,6 +459,34 @@ export async function listRuns(email: string, limit = 5): Promise<Run[]> {
   if (error) {
     console.error("[db] listRuns", error.message);
     return memory().runs.filter((r) => r.created_by === email).slice(0, limit);
+  }
+  return (data as Run[]).map((r) => ({ ...r, assets: [] }));
+}
+
+/**
+ * Le esecuzioni di certe campagne, di tutto il team, dalla piu' recente.
+ * Serve alla home per le scadenze dei bandi: una data entra solo se
+ * un'esecuzione l'ha letta da una fonte.
+ */
+export async function listCampaignRuns(campaignIds: string[], limit = 50): Promise<Run[]> {
+  if (campaignIds.length === 0) return [];
+  const supabase = db();
+  if (!supabase) {
+    return memory()
+      .runs.filter((r) => r.campaign_id !== null && campaignIds.includes(r.campaign_id))
+      .slice(0, limit);
+  }
+
+  const { data, error } = await supabase
+    .from("runs")
+    .select("*")
+    .in("campaign_id", campaignIds)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[db] listCampaignRuns", error.message);
+    return [];
   }
   return (data as Run[]).map((r) => ({ ...r, assets: [] }));
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ChevronDown, FileText, ImageIcon, Link2, Minus, Plus } from "lucide-react";
+import { ChevronDown, ChevronLeft, FileText, ImageIcon, Link2, Minus, Plus } from "lucide-react";
 import { FORMATS, FORMAT_ORDER, type FormatId } from "@/lib/brand";
 import { durationLabel, timeAgo } from "@/lib/format";
 import type { Attachment, Run, Template, Tool } from "@/lib/types";
@@ -30,6 +30,8 @@ interface Props {
   imageId: string | null;
   imageLabel: string | null;
   onImage: (choice: ImageChoice | null) => void;
+  /** Torna alla home degli strumenti, quando il brief libero e' stato aperto da li'. */
+  onHome?: () => void;
 }
 
 type Step = 1 | 2 | 3;
@@ -66,6 +68,7 @@ export function Composer({
   imageId,
   imageLabel,
   onImage,
+  onHome,
 }: Props) {
   const [step, setStep] = useState<Step>(activeTool ? (instruction.trim() ? 3 : 2) : 1);
   const fieldId = useId();
@@ -112,10 +115,16 @@ export function Composer({
     .join(" · ");
 
   return (
-    <div className="mx-auto flex w-full max-w-[780px] flex-col gap-4 px-8 pt-7">
+    <div className="mx-auto flex w-full max-w-[780px] flex-col gap-4 px-4 pt-6 md:px-8 md:pt-7">
       <header className="pb-1">
+        {onHome ? (
+          <button type="button" onClick={onHome} className="mb-2 flex cursor-pointer items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--color-rose-ink)" }}>
+            <ChevronLeft size={14} strokeWidth={2.2} />
+            Torna agli strumenti
+          </button>
+        ) : null}
         <h1 className="text-[22px] font-semibold tracking-[-0.01em]" style={{ color: "var(--color-ink)" }}>
-          Nuova creazione
+          Brief libero
         </h1>
         <p className="mt-1 text-[14px]" style={{ color: "var(--color-ink-soft)" }}>
           Parti da uno strumento salvato o da un brief tuo: poi lo Studio scrive, impagina e controlla il brand da solo.
@@ -417,7 +426,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (n: number) => 
       <span className="w-[86px] text-center tabular-nums" style={{ color: "var(--color-ink)" }}>
         {value} {value === 1 ? "variante" : "varianti"}
       </span>
-      <StepButton label="Più varianti" onClick={() => onChange(Math.min(3, value + 1))}>
+      <StepButton label="Più varianti" onClick={() => onChange(Math.min(4, value + 1))}>
         <Plus size={14} strokeWidth={2.2} />
       </StepButton>
     </span>

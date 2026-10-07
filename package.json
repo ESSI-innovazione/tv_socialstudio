@@ -10,7 +10,8 @@
     "test:layout": "tsc lib/layout-model.ts lib/brand.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck && node scripts/layout-model.test.cjs",
     "test:figma": "tsc lib/integrations/figma.ts lib/integrations/figma-errors.ts --outDir .tmp-test --module commonjs --target es2020 --skipLibCheck --esModuleInterop && node scripts/figma.test.cjs",
     "test:images": "tsc lib/db-images.ts lib/env.ts --outDir .tmp-test --module commonjs --target es2022 --skipLibCheck --esModuleInterop --moduleResolution node && node scripts/images.test.cjs",
-    "test": "npm run test:layout && npm run test:figma && npm run test:gamma && npm run test:images && npm run test:video",
+    "test:tools": "tsc lib/tool-fields.ts lib/format.ts --outDir .tmp-test --module commonjs --target es2022 --skipLibCheck && node scripts/tool-fields.test.cjs",
+    "test": "npm run test:layout && npm run test:figma && npm run test:gamma && npm run test:images && npm run test:video && npm run test:tools",
     "test:gamma": "tsc lib/integrations/gamma.ts lib/integrations/gamma-errors.ts lib/integrations/gamma-config.ts lib/db-documents.ts lib/storage.ts --outDir .tmp-test --module commonjs --target es2022 --skipLibCheck --esModuleInterop --moduleResolution node && node scripts/gamma.test.cjs",
     "test:video": "tsc lib/video/spec.ts lib/video/timeline.ts lib/video/errors.ts lib/video/jobs.ts lib/db-videos.ts lib/storage.ts lib/env.ts lib/brand.ts lib/layout-model.ts --outDir .tmp-test --module commonjs --target es2022 --skipLibCheck --esModuleInterop --moduleResolution node && node scripts/video.test.cjs"
   },

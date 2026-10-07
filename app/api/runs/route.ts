@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const attachments = Array.isArray(payload.attachments) ? payload.attachments.filter(isAttachment) : [];
   const variantCount =
     typeof payload.variantCount === "number" && Number.isInteger(payload.variantCount)
-      ? Math.min(3, Math.max(1, payload.variantCount))
+      ? Math.min(4, Math.max(1, payload.variantCount))
       : 3;
   const toolSlug = typeof payload.toolSlug === "string" && payload.toolSlug ? payload.toolSlug : "libero";
 

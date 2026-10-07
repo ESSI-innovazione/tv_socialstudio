@@ -95,6 +95,18 @@ const VARIANTS: VariantCopy[] = [
     cta_url: "https://timevision.it/voucher-cloud",
     disclaimer: BRIEF.disclaimer,
   },
+  {
+    index: 3,
+    layout: "testo in alto",
+    eyebrow: "MIMIT · Voucher cloud e cybersecurity",
+    headline: "Il 50% delle spese lo copre il ministero",
+    subhead: "Fino a 20.000 € a fondo perduto per servizi cloud e cybersecurity",
+    body: "150 milioni di euro per PMI e lavoratori autonomi titolari di partita IVA. Click-day il 10 novembre 2026 alle ore 12:00: la domanda si prepara prima.",
+    badge: "Click-day 10 novembre 2026",
+    cta_label: "Scopri il voucher",
+    cta_url: "https://timevision.it/voucher-cloud",
+    disclaimer: BRIEF.disclaimer,
+  },
 ];
 
 const CAPTIONS: Caption[] = [
