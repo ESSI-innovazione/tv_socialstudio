@@ -117,6 +117,17 @@ create unique index if not exists templates_figma_node_id_key
 -- Il template proposto da uno strumento (migrazione 012): dopo templates, che referenzia.
 alter table tools add column if not exists default_template uuid references templates(id) on delete set null;
 
+-- Lo storico delle sincronizzazioni da Figma (migrazione 013).
+create table if not exists template_syncs (
+  id        uuid primary key default gen_random_uuid(),
+  at        timestamptz not null default now(),
+  by        text,
+  summary   text not null,
+  changes   jsonb not null default '[]'
+);
+
+create index if not exists template_syncs_at_idx on template_syncs (at desc);
+
 -- ---------------------------------------------------------------
 -- Esecuzioni — una riga per run, stato completo per il refresh
 -- ---------------------------------------------------------------
@@ -253,3 +264,4 @@ alter table approvals       enable row level security;
 alter table scheduled_posts enable row level security;
 alter table profile_events  enable row level security;
 alter table tool_versions   enable row level security;
+alter table template_syncs  enable row level security;

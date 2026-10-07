@@ -254,6 +254,7 @@ export const MEMORY_SEED = {
   campaigns: CAMPAIGNS,
   tools: TOOLS,
   toolVersions: [],
+  templateSyncs: [],
   templates: TEMPLATES,
   runs: RUNS,
   approvals: APPROVALS,

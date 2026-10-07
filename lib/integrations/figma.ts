@@ -279,6 +279,39 @@ async function call<T>(endpoint: string, token: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Vero quando token e chiave del file ci sono: senza, la libreria e' quella di prova. */
+export function figmaConfigured(): boolean {
+  return Boolean(env.figmaToken && env.figmaFileKey);
+}
+
+/** L'indirizzo del file in Figma, per «Apri in Figma». */
+export function figmaFileUrl(): string | null {
+  return env.figmaFileKey ? `https://www.figma.com/file/${env.figmaFileKey}` : null;
+}
+
+/**
+ * Legge la libreria senza scrivere niente: e' il primo passo della
+ * sincronizzazione, quello che mostra cosa e' cambiato prima di decidere.
+ */
+export async function readFigmaLibrary(): Promise<{ file: { name: string; lastModified: string }; specs: TemplateSpec[] }> {
+  const { token, fileKey } = credentials();
+
+  const file = await call<FigmaFile>(`/v1/files/${fileKey}`, token);
+
+  const pages = (file.document.children ?? []).filter((page) =>
+    page.name.trim().startsWith("TPL/"),
+  );
+
+  if (pages.length === 0) {
+    throw new TemplateIncompleteError(
+      file.name,
+      `nessuna pagina «TPL/…» nel file. Vedi TEMPLATES.md per la convenzione.`,
+    );
+  }
+
+  return { file: { name: file.name, lastModified: file.lastModified }, specs: pages.map((page) => pageToSpec(page, file.lastModified)) };
+}
+
 export const figmaTemplates: TemplateSource = {
   /**
    * Rilegge la libreria e riscrive la cache. E' l'unica operazione che tocca
@@ -286,22 +319,7 @@ export const figmaTemplates: TemplateSource = {
    * chiama a ogni caricamento di pagina e il rate limit di Figma e' reale.
    */
   async sync() {
-    const { token, fileKey } = credentials();
-
-    const file = await call<FigmaFile>(`/v1/files/${fileKey}`, token);
-
-    const pages = (file.document.children ?? []).filter((page) =>
-      page.name.trim().startsWith("TPL/"),
-    );
-
-    if (pages.length === 0) {
-      throw new TemplateIncompleteError(
-        file.name,
-        `nessuna pagina «TPL/…» nel file. Vedi TEMPLATES.md per la convenzione.`,
-      );
-    }
-
-    const specs = pages.map((page) => pageToSpec(page, file.lastModified));
+    const { specs } = await readFigmaLibrary();
     const result = await writeTemplateSpecs(specs);
 
     return { ...result, at: new Date().toISOString() };

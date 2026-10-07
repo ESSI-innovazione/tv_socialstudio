@@ -120,6 +120,26 @@ export interface Template {
   synced_at: string | null;
 }
 
+/** Una differenza fra la libreria Figma e la cache, prima di scrivere. */
+export interface TemplateChange {
+  /** L'id del nodo Figma della pagina TPL/… */
+  id: string;
+  name: string;
+  kind: "new" | "modified" | "removed";
+  /** Una riga: cosa e' cambiato. */
+  description: string;
+  formats: FormatId[];
+}
+
+/** Un passaggio di sincronizzazione che ha scritto qualcosa. */
+export interface TemplateSync {
+  id: string;
+  at: string;
+  by: string | null;
+  summary: string;
+  changes: TemplateChange[];
+}
+
 /* ------------------------------------------------------------------ */
 /* Esecuzioni                                                           */
 /* ------------------------------------------------------------------ */

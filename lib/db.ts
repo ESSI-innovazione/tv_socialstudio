@@ -12,6 +12,7 @@ import type {
   RunState,
   ScheduledPost,
   Template,
+  TemplateSync,
   Tool,
   ToolSnapshot,
   ToolVersion,
@@ -51,6 +52,7 @@ interface MemoryStore {
   campaigns: Campaign[];
   tools: Tool[];
   toolVersions: ToolVersion[];
+  templateSyncs: TemplateSync[];
   templates: Template[];
   runs: Run[];
   approvals: Approval[];
@@ -66,7 +68,7 @@ const globalStore = globalThis as unknown as { __tvStore?: MemoryStore; __tvStor
  * righe vecchie a codice nuovo: in sviluppo il processo sopravvive ai
  * salvataggi, e uno store stantio e' un errore difficile da riconoscere.
  */
-const SEED_VERSION = 4;
+const SEED_VERSION = 5;
 
 function memory(): MemoryStore {
   if (!globalStore.__tvStore || globalStore.__tvStoreVersion !== SEED_VERSION) {
@@ -436,6 +438,48 @@ export async function getTemplates(): Promise<Template[]> {
     return memory().templates;
   }
   return data as Template[];
+}
+
+/** Un passaggio di sincronizzazione che ha scritto: chi, quando, cosa. */
+export async function recordTemplateSync(input: Omit<TemplateSync, "id" | "at">): Promise<TemplateSync> {
+  const row: TemplateSync = { id: crypto.randomUUID(), at: new Date().toISOString(), ...input };
+  const supabase = db();
+  if (!supabase) {
+    memory().templateSyncs.unshift(row);
+    return row;
+  }
+  const { error } = await supabase.from("template_syncs").insert(row);
+  if (error) console.error("[db] recordTemplateSync", error.message);
+  return row;
+}
+
+export async function listTemplateSyncs(limit = 20): Promise<TemplateSync[]> {
+  const supabase = db();
+  if (!supabase) return memory().templateSyncs.slice(0, limit);
+
+  const { data, error } = await supabase.from("template_syncs").select("*").order("at", { ascending: false }).limit(limit);
+  if (error) {
+    console.error("[db] listTemplateSyncs", error.message);
+    return [];
+  }
+  return data as TemplateSync[];
+}
+
+/** Quante esecuzioni usano ogni template: per dire «in uso» nella libreria. */
+export async function countRunsByTemplate(): Promise<Record<string, number>> {
+  const supabase = db();
+  const out: Record<string, number> = {};
+  if (!supabase) {
+    for (const r of memory().runs) if (r.template_id) out[r.template_id] = (out[r.template_id] ?? 0) + 1;
+    return out;
+  }
+  const { data, error } = await supabase.from("runs").select("template_id").not("template_id", "is", null).limit(2000);
+  if (error) {
+    console.error("[db] countRunsByTemplate", error.message);
+    return out;
+  }
+  for (const row of data as { template_id: string }[]) out[row.template_id] = (out[row.template_id] ?? 0) + 1;
+  return out;
 }
 
 export async function upsertTemplates(rows: Omit<Template, "id">[]): Promise<Template[]> {
