@@ -4,6 +4,7 @@ import { Building2, Camera, LoaderCircle } from "lucide-react";
 import { FORMATS, type FormatId } from "@/lib/brand";
 import { deadlineLabel, daysUntil } from "@/lib/format";
 import type { AssetLayout } from "@/lib/layout-model";
+import type { ChannelStatus } from "@/lib/publish";
 import type { Asset, Run, RunState } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { AssetPreview } from "./asset-preview";
@@ -19,7 +20,7 @@ interface Props {
   run: Run | null;
   selected: number;
   user: StudioUser;
-  channelsLive: boolean;
+  channels: ChannelStatus;
   /** Le impaginazioni ritoccate: il brand-guard controlla quelle. */
   layouts: Record<string, AssetLayout>;
   onAssets: (assets: Asset[]) => void;
@@ -29,7 +30,7 @@ interface Props {
  * La colonna di destra fa una cosa sola: mostra cosa si sta per ottenere,
  * o cosa si e' ottenuto. Niente regole, niente stato dei canali.
  */
-export function RightRail({ state, formats, variantCount, photoUrl, run, selected, user, channelsLive, layouts, onAssets }: Props) {
+export function RightRail({ state, formats, variantCount, photoUrl, run, selected, user, channels, layouts, onAssets }: Props) {
   return (
     <aside
       className="tv-scroll flex w-[372px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5"
@@ -39,7 +40,7 @@ export function RightRail({ state, formats, variantCount, photoUrl, run, selecte
       {state === "composing" ? <Sheets formats={formats} variantCount={variantCount} photoUrl={photoUrl} /> : null}
       {state === "running" ? <RunningRail run={run} /> : null}
       {state === "results" && run ? (
-        <PublishRail run={run} selected={selected} user={user} channelsLive={channelsLive} layouts={layouts} onAssets={onAssets} />
+        <PublishRail run={run} selected={selected} user={user} channels={channels} layouts={layouts} onAssets={onAssets} />
       ) : null}
     </aside>
   );
@@ -179,14 +180,14 @@ function PublishRail({
   run,
   selected,
   user,
-  channelsLive,
+  channels,
   layouts,
   onAssets,
 }: {
   run: Run;
   selected: number;
   user: StudioUser;
-  channelsLive: boolean;
+  channels: ChannelStatus;
   layouts: Record<string, AssetLayout>;
   onAssets: (assets: Asset[]) => void;
 }) {
@@ -226,7 +227,7 @@ function PublishRail({
         </p>
       ) : null}
 
-      <PublishFlow run={run} selected={selected} layouts={layouts} user={user} channelsLive={channelsLive} onAssets={onAssets} />
+      <PublishFlow run={run} selected={selected} layouts={layouts} user={user} channels={channels} onAssets={onAssets} />
     </>
   );
 }

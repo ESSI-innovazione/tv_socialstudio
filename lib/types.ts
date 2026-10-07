@@ -210,20 +210,30 @@ export interface Attachment {
 
 export type PostStatus = "draft" | "pending_approval" | "approved" | "scheduled" | "published" | "failed";
 
+export type Channel = "linkedin" | "instagram";
+export type Surface = "feed" | "story";
+
 export interface ScheduledPost {
   id: string;
   run_id: string;
-  channel: "linkedin" | "instagram";
+  channel: Channel;
   /** Per Instagram: feed oppure story. */
-  surface: string;
+  surface: Surface;
   caption: string;
   hashtags: string[];
   asset_id: string | null;
+  /** La variante pubblicata, per riaprire l'asset giusto dal calendario. */
+  variant_index: number | null;
   status: PostStatus;
   scheduled_for: string | null;
   published_at: string | null;
   external_id: string | null;
   error: string | null;
+  attempts: number;
+  /** Quando una funzione l'ha preso in carico: evita la doppia pubblicazione. */
+  claimed_at: string | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface Approval {

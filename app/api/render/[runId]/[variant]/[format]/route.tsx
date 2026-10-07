@@ -2,7 +2,9 @@ import { ImageResponse } from "next/og";
 import { FORMATS, type FormatId } from "@/lib/brand";
 import { getRun } from "@/lib/db";
 import { archetypeFromLabel, decodeLayout, templateLayout, type BlockText } from "@/lib/layout-model";
+import { assetPage } from "@/lib/render/asset-page";
 import { fontsFor } from "@/lib/render/fonts";
+import { snapshotAsset } from "@/lib/render/snapshot";
 import { AssetCanvas } from "@/components/studio/asset-canvas";
 import { MOCK_VARIANTS, MOCK_BRIEF } from "@/lib/mock-run";
 
@@ -20,6 +22,8 @@ import { MOCK_VARIANTS, MOCK_BRIEF } from "@/lib/mock-run";
  */
 
 export const runtime = "nodejs";
+// Il JPEG e il PDF passano da Chromium: un minuto basta, i dieci secondi del default no.
+export const maxDuration = 120;
 
 interface Params {
   runId: string;
@@ -31,12 +35,29 @@ function isFormat(value: string): value is FormatId {
   return value in FORMATS;
 }
 
+/**
+ * Il tipo di file lo decide l'estensione: `.png` (Satori, il default),
+ * `.jpg` (Chromium: Instagram non accetta PNG), `.pdf` (Chromium, solo per
+ * il poster: la stampa vuole vettori, non pixel).
+ */
+type FileKind = "png" | "jpg" | "pdf";
+
+function splitExtension(raw: string): { format: string; kind: FileKind } {
+  const match = /\.(png|jpe?g|pdf)$/i.exec(raw);
+  if (!match) return { format: raw, kind: "png" };
+  const ext = match[1].toLowerCase();
+  return { format: raw.slice(0, -match[0].length), kind: ext === "pdf" ? "pdf" : ext.startsWith("jp") ? "jpg" : "png" };
+}
+
 export async function GET(request: Request, context: { params: Promise<Params> }) {
   const { runId, variant, format: rawFormat } = await context.params;
 
-  const format = rawFormat.replace(/\.png$/, "");
+  const { format, kind } = splitExtension(rawFormat);
   if (!isFormat(format)) {
     return new Response(`Formato sconosciuto: ${format}`, { status: 404 });
+  }
+  if (kind === "pdf" && format !== "poster-a4") {
+    return new Response("Il PDF esiste solo per il poster A4.", { status: 400 });
   }
 
   const index = Number.parseInt(variant, 10);
@@ -73,6 +94,27 @@ export async function GET(request: Request, context: { params: Promise<Params> }
   const baseUrl = url.origin;
 
   const layout = decodeLayout(url.searchParams.get("layout"), format) ?? templateLayout(format, archetype, text);
+
+  if (kind !== "png") {
+    try {
+      const html = await assetPage({ copy, layout, archetype, photo, format }, baseUrl);
+      const snapshot = await snapshotAsset(html, format, kind === "pdf" ? "pdf" : "jpeg");
+      const name = `timevision-v${index + 1}-${format}.${kind}`;
+      return new Response(new Uint8Array(snapshot.bytes), {
+        headers: {
+          "Content-Type": snapshot.mime,
+          "Content-Length": String(snapshot.bytes.byteLength),
+          "Content-Disposition": `${url.searchParams.has("download") ? "attachment" : "inline"}; filename="${name}"`,
+          "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[render] chromium", message);
+      return new Response(`Export ${kind.toUpperCase()} non riuscito: ${message}`, { status: 500 });
+    }
+  }
+
   const fonts = await fontsFor(layout.style?.font);
 
   return new ImageResponse(

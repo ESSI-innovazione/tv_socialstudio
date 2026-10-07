@@ -6,6 +6,7 @@ import { mockScript, startMockRun } from "@/lib/mock-run";
 import { applyEvent } from "@/lib/run-events";
 import { SAMPLE_ATTACHMENTS } from "@/lib/seed-data";
 import type { AssetLayout } from "@/lib/layout-model";
+import type { ChannelStatus } from "@/lib/publish";
 import type { Asset, Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
@@ -25,7 +26,7 @@ interface Props {
   /** Esecuzione ripristinata dal server dopo un refresh, se c'e'. */
   initialRun: Run | null;
   /** Falso finche' le integrazioni girano sui mock. */
-  channelsLive: boolean;
+  channels: ChannelStatus;
   figmaSyncedAt: string | null;
 }
 
@@ -39,7 +40,7 @@ interface Props {
  * Ogni ritocco al testo viene salvato poco dopo, cosi' lo storico e
  * l'archivio mostrano quello che si vede qui.
  */
-export function StudioShell({ user, tools, campaigns, templates, recentRuns, initialRun, channelsLive, figmaSyncedAt }: Props) {
+export function StudioShell({ user, tools, campaigns, templates, recentRuns, initialRun, channels, figmaSyncedAt }: Props) {
   const restorable = initialRun && initialRun.variants.length > 0 ? initialRun : null;
 
   const [state, setState] = useState<RunState>(restorable ? restorable.state : "composing");
@@ -273,7 +274,8 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
               onPhoto={setPhoto}
               onReset={reset}
               user={user}
-              channelsLive={channelsLive}
+              channels={channels}
+              onAssets={mergeAssets}
               layouts={layouts}
               onLayouts={setLayouts}
             />
@@ -288,7 +290,7 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
           run={run}
           selected={selected}
           user={user}
-          channelsLive={channelsLive}
+          channels={channels}
           layouts={layouts}
           onAssets={mergeAssets}
         />

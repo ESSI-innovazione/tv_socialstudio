@@ -15,6 +15,7 @@ export function studioNav(role: Role): NavItem[] {
     { href: "/studio", label: "Studio" },
     { href: "/studio/storico", label: "I miei lavori" },
     { href: "/studio/archivio", label: "Archivio" },
+    { href: "/studio/calendario", label: "Calendario" },
   ];
   if (role === "approver") {
     items.push({ href: "/studio/approvazioni", label: "Approvazioni" });

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { getCampaigns, getLatestRun, getRun, getTemplates, getTools, listRuns } from "@/lib/db";
-import { env } from "@/lib/env";
+import { channelStatus } from "@/lib/publish";
 import { timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
       templates={templates}
       recentRuns={recentRuns}
       initialRun={latestRun}
-      channelsLive={Boolean(env.linkedinToken && env.igToken)}
+      channels={channelStatus()}
       figmaSyncedAt={synced ? timeAgo(synced) : "mai sincronizzato"}
     />
   );
