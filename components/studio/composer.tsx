@@ -34,6 +34,9 @@ interface Props {
 
 type Step = 1 | 2 | 3;
 
+/** Lo pseudo-strumento del brief libero: nessuna riga nella tabella, nessun canovaccio. */
+export const FREE_BRIEF = "libero";
+
 /**
  * La composizione in tre passi, uno aperto alla volta.
  *
@@ -69,14 +72,17 @@ export function Composer({
 
   const tool = tools.find((t) => t.slug === activeTool) ?? null;
   const template = templates.find((t) => t.id === templateId) ?? templates[0] ?? null;
-  const launchable = tools.filter((t) => !t.automatic);
+
+  // «Scrivi tu»: nessuno strumento, il brief e' tutto di chi lo scrive.
+  const free = activeTool === FREE_BRIEF;
+  const chosen = Boolean(tool) || free;
 
   const briefDone = instruction.trim().length > 12;
   const formatsDone = formats.length > 0;
-  const ready = Boolean(tool) && briefDone && formatsDone;
+  const ready = chosen && briefDone && formatsDone;
 
-  const hint = !tool
-    ? "Scegli cosa vuoi creare"
+  const hint = !chosen
+    ? "Scegli uno strumento, oppure scrivi tu"
     : !briefDone
       ? "Scrivi il brief per continuare"
       : !formatsDone
@@ -88,6 +94,12 @@ export function Composer({
   const pickTool = (slug: string) => {
     onTool(slug);
     setStep(2);
+  };
+
+  /** Il brief libero scritto al passo 1 e' gia' il passo 2: si va ai formati. */
+  const continueFree = () => {
+    onTool(FREE_BRIEF);
+    setStep(3);
   };
 
   const step3Summary = [
@@ -106,23 +118,65 @@ export function Composer({
           Nuova creazione
         </h1>
         <p className="mt-1 text-[14px]" style={{ color: "var(--color-ink-soft)" }}>
-          Tre passi, poi lo Studio scrive, impagina e controlla il brand da solo.
+          Parti da uno strumento salvato o da un brief tuo: poi lo Studio scrive, impagina e controlla il brand da solo.
         </p>
       </header>
 
-      {/* ---------------- 1 · cosa ---------------- */}
+      {/* ---------------- 1 · gli strumenti ---------------- */}
       <StepCard
         number={1}
         title="Cosa vuoi creare?"
-        summary={tool ? tool.description : null}
-        done={Boolean(tool)}
+        summary={tool ? tool.description : free ? "Brief libero, scritto da te" : null}
+        done={chosen}
         open={step === 1}
         onOpen={() => setStep(1)}
       >
-        <div className="grid grid-cols-2 gap-3">
-          {launchable.map((t) => (
-            <ToolCard key={t.id} tool={t} active={t.slug === activeTool} onPick={() => pickTool(t.slug)} />
-          ))}
+        <p className="tv-label pb-2.5">STRUMENTI SALVATI</p>
+        <div className="grid grid-cols-3 gap-3">
+          {tools.map((t) =>
+            t.automatic ? (
+              <AutomaticToolCard key={t.id} tool={t} />
+            ) : (
+              <ToolCard key={t.id} tool={t} active={t.slug === activeTool} onPick={() => pickTool(t.slug)} />
+            ),
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center gap-3">
+          <span className="h-px flex-1" style={{ background: "var(--color-line)" }} />
+          <span className="tv-label">OPPURE SCRIVI TU</span>
+          <span className="h-px flex-1" style={{ background: "var(--color-line)" }} />
+        </div>
+        <textarea
+          value={free || !tool ? instruction : ""}
+          onChange={(e) => {
+            if (tool) onTool(FREE_BRIEF);
+            onInstruction(e.target.value);
+          }}
+          rows={3}
+          spellCheck={false}
+          placeholder="Nessuno strumento fa al caso tuo? Racconta la campagna: misura, importi, scadenza, a chi si rivolge, tono."
+          className="tv-scroll mt-3 w-full resize-none rounded-[12px] px-4 py-3 text-[14.5px] leading-[1.6] outline-none transition-[border-color,box-shadow] focus:shadow-focus"
+          style={{
+            border: `1.5px dashed ${free ? "var(--color-rose)" : "var(--color-line)"}`,
+            background: "var(--color-paper)",
+            color: "var(--color-ink)",
+          }}
+        />
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={continueFree}
+            disabled={!briefDone || Boolean(tool)}
+            className="tv-pill h-[40px] px-5 text-[13.5px] transition-colors"
+            style={{
+              background: briefDone && !tool ? "var(--color-wine)" : "var(--color-line-soft)",
+              color: briefDone && !tool ? "#ffffff" : "var(--color-ink-faint)",
+              cursor: briefDone && !tool ? "pointer" : "not-allowed",
+            }}
+          >
+            Continua con il mio brief
+          </button>
         </div>
       </StepCard>
 
@@ -308,6 +362,33 @@ function ToolCard({ tool, active, onPick }: { tool: Tool; active: boolean; onPic
         </span>
       </span>
     </button>
+  );
+}
+
+/** Gli strumenti di sistema: si vedono, non si lanciano. Dicono cosa fanno da soli. */
+function AutomaticToolCard({ tool }: { tool: Tool }) {
+  const Icon = toolIcon(tool.slug);
+  return (
+    <div
+      className="flex items-start gap-3.5 rounded-card p-4 text-left"
+      style={{ border: "1.5px dashed var(--color-line)", background: "var(--color-line-soft)" }}
+      aria-label={`${tool.title}: ${tool.note ?? "automatico"}`}
+    >
+      <span className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px]" style={{ background: "var(--color-paper)", color: "var(--color-ink-faint)" }}>
+        <Icon size={19} strokeWidth={1.9} />
+      </span>
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="flex items-center gap-2 text-[15px] font-semibold" style={{ color: "var(--color-ink-soft)" }}>
+          {tool.title}
+          <span className="tv-pill h-[18px] px-2 text-[10px]" style={{ background: "var(--color-paper)", color: "var(--color-ink-faint)" }}>
+            automatico
+          </span>
+        </span>
+        <span className="text-[12.5px] leading-[1.45]" style={{ color: "var(--color-ink-faint)" }}>
+          {tool.description}
+        </span>
+      </span>
+    </div>
   );
 }
 
