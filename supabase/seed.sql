@@ -57,7 +57,7 @@ update tools set
     {"key":"target","label":"A chi si rivolge","type":"text","required":true,"example":"imprenditori e titolari di PMI"},
     {"key":"cta","label":"Chiamata all''azione","type":"choice_link","required":true,"example":"Scopri il voucher","options":["Scopri il voucher","Prenota una consulenza gratuita","Iscriviti al corso","Scarica la scheda","Contattaci"]}
   ]'::jsonb,
-  cta_label = 'Crea il poster', cover_image = 'tv-fondi.jpg', category = 'stampa', estimated_minutes = 3
+  cta_label = 'Crea il poster', cover_image = 'site-bandi.jpg', category = 'stampa', estimated_minutes = 3
 where slug = 'poster-bando' and fields = '[]'::jsonb;
 
 update tools set
@@ -66,14 +66,14 @@ update tools set
     {"key":"tono","label":"Il tono","type":"choice","required":true,"example":"istituzionale","options":["istituzionale","diretto","caldo"]},
     {"key":"target","label":"A chi si rivolge","type":"text","required":false,"example":"imprese e professionisti"}
   ]'::jsonb,
-  cta_label = 'Crea il catalogo', cover_image = 'tv-consulenza.jpg', category = 'stampa', estimated_minutes = 5
+  cta_label = 'Crea il catalogo', cover_image = 'site-consulenza.webp', category = 'stampa', estimated_minutes = 5
 where slug = 'catalogo-servizi' and fields = '[]'::jsonb;
 
 update tools set
   fields = '[
     {"key":"concept","label":"Il concept","type":"longtext","required":true,"example":"Una nuvola di dati che protegge una piccola impresa"}
   ]'::jsonb,
-  cta_label = 'Genera il visual', cover_image = 'tv-digitale.jpg', category = 'social', estimated_minutes = 2
+  cta_label = 'Genera il visual', cover_image = 'site-innovazione.webp', category = 'social', estimated_minutes = 2
 where slug = 'visual-3d' and fields = '[]'::jsonb;
 
 update tools set
@@ -81,7 +81,7 @@ update tools set
     {"key":"argomento","label":"L''argomento","type":"text","required":true,"example":"Corsi gratuiti CIG Puglia, indennita'' 2.400 euro"},
     {"key":"cta","label":"Chiamata all''azione","type":"choice_link","required":true,"example":"Iscriviti al corso","options":["Scopri il voucher","Prenota una consulenza gratuita","Iscriviti al corso","Scarica la scheda","Contattaci"]}
   ]'::jsonb,
-  cta_label = 'Crea il kit', cover_image = 'tv-network.jpg', category = 'social', estimated_minutes = 3
+  cta_label = 'Crea il kit', cover_image = 'site-network.webp', category = 'social', estimated_minutes = 3
 where slug = 'social-kit' and fields = '[]'::jsonb;
 
 insert into templates (figma_node_id, name, description, frame_count, formats, synced_at) values

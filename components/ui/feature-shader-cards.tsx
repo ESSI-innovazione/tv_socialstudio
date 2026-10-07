@@ -71,9 +71,14 @@ export interface ShaderCardProps {
   onClick?: () => void;
   className?: string;
   speed?: number;
+  /**
+   * Una fotografia al posto dello shader: la foto riempie la card e il velo
+   * vino la porta in palette. Senza, resta il fondo shader del brand.
+   */
+  image?: string;
 }
 
-export function ShaderCard({ title, description, icon, config, badge, footer, active = false, muted = false, onClick, className = "h-[200px]", speed = 0.5 }: ShaderCardProps) {
+export function ShaderCard({ title, description, icon, config, badge, footer, active = false, muted = false, onClick, className = "h-[200px]", speed = 0.5, image }: ShaderCardProps) {
   const reduced = useReducedMotion();
   const shader = muted ? MUTED_SHADER : (config ?? BRAND_SHADERS[0]);
   const Tag = onClick && !muted ? "button" : "div";
@@ -91,27 +96,41 @@ export function ShaderCard({ title, description, icon, config, badge, footer, ac
       }}
     >
       <div className="absolute inset-0" aria-hidden>
-        <Warp
-          style={{ height: "100%", width: "100%" }}
-          proportion={shader.proportion}
-          softness={shader.softness}
-          distortion={shader.distortion}
-          swirl={shader.swirl}
-          swirlIterations={shader.swirlIterations}
-          shape={shader.shape}
-          shapeScale={shader.shapeScale}
-          scale={1}
-          rotation={0}
-          speed={reduced ? 0 : speed}
-          colors={shader.colors}
-        />
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-500"
+            style={{ filter: muted ? "grayscale(1)" : "none", transform: active ? "scale(1.04)" : "none" }}
+          />
+        ) : (
+          <Warp
+            style={{ height: "100%", width: "100%" }}
+            proportion={shader.proportion}
+            softness={shader.softness}
+            distortion={shader.distortion}
+            swirl={shader.swirl}
+            swirlIterations={shader.swirlIterations}
+            shape={shader.shape}
+            shapeScale={shader.shapeScale}
+            scale={1}
+            rotation={0}
+            speed={reduced ? 0 : speed}
+            colors={shader.colors}
+          />
+        )}
       </div>
 
-      {/* Il velo: inchiostro, piu' fitto in basso dove sta il testo. */}
+      {/* Il velo: vino sulla foto, inchiostro sullo shader; piu' fitto in basso dove sta il testo. */}
       <div
         className="absolute inset-0"
         aria-hidden
-        style={{ background: `linear-gradient(180deg, ${muted ? "rgba(42,17,25,.62)" : "rgba(42,17,25,.42)"} 0%, rgba(42,17,25,.84) 100%)` }}
+        style={{
+          background: image
+            ? `linear-gradient(180deg, ${muted ? "rgba(42,17,25,.6)" : "rgba(114,0,38,.45)"} 0%, rgba(42,17,25,.9) 100%)`
+            : `linear-gradient(180deg, ${muted ? "rgba(42,17,25,.62)" : "rgba(42,17,25,.42)"} 0%, rgba(42,17,25,.84) 100%)`,
+        }}
       />
 
       <div className="relative z-10 flex h-full flex-col p-4">

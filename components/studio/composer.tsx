@@ -361,6 +361,7 @@ function ToolCard({ tool, index, active, onPick }: { tool: Tool; index: number; 
       description={tool.description}
       icon={<Icon size={19} strokeWidth={1.9} />}
       config={shaderConfigFor(index)}
+      image={tool.cover_image ? `/brand/${tool.cover_image}` : undefined}
       active={active}
       onClick={onPick}
       className="h-[196px]"
@@ -377,6 +378,9 @@ function ToolCard({ tool, index, active, onPick }: { tool: Tool; index: number; 
   );
 }
 
+/** Le foto del sito per gli strumenti di sistema, che non hanno una copertina in tabella. */
+const AUTOMATIC_COVERS: Record<string, string> = { "figma-sync": "site-servizi.webp", "brand-guard": "site-formazione.webp" };
+
 /** Gli strumenti di sistema: si vedono, non si lanciano. Dicono cosa fanno da soli. */
 function AutomaticToolCard({ tool, index }: { tool: Tool; index: number }) {
   const Icon = toolIcon(tool.slug);
@@ -386,6 +390,7 @@ function AutomaticToolCard({ tool, index }: { tool: Tool; index: number }) {
       description={tool.description}
       icon={<Icon size={19} strokeWidth={1.9} />}
       config={shaderConfigFor(index)}
+      image={`/brand/${AUTOMATIC_COVERS[tool.slug] ?? "site-servizi.webp"}`}
       badge="automatico"
       muted
       className="h-[196px]"

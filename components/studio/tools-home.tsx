@@ -193,6 +193,7 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
         description={`${tool.description}${formats ? ` · ${formats}` : ""}`}
         icon={<Icon size={19} strokeWidth={1.9} />}
         config={shaderConfigFor(index)}
+        image={tool.cover_image ? `/brand/${tool.cover_image}` : undefined}
         badge={tool.estimated_minutes ? `${tool.estimated_minutes} min` : undefined}
         className="h-[236px]"
         onClick={() => router.push(`/studio/strumenti/${tool.slug}`)}
