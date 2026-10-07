@@ -35,7 +35,7 @@ export async function POST() {
 }
 
 /** Quando la libreria e' stata letta l'ultima volta, e quanti template ci sono. */
-export async function lastSync(): Promise<{ at: string | null; templates: number }> {
+async function lastSync(): Promise<{ at: string | null; templates: number }> {
   const templates = await getTemplates();
   const at = templates.map((t) => t.synced_at).filter((s): s is string => Boolean(s)).sort().at(-1) ?? null;
   return { at, templates: templates.length };
