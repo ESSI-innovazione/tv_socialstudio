@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Bell, CalendarDays, Clock, PenLine, Search, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Bell, CalendarDays, PenLine, Search, ShieldCheck } from "lucide-react";
+import { ShaderCard, shaderConfigFor } from "@/components/ui/feature-shader-cards";
 import { FORMATS } from "@/lib/brand";
 import { deadlineLabel, timeAgo } from "@/lib/format";
 import type { HomeData } from "@/lib/home-data";
@@ -118,7 +120,7 @@ export function ToolsHome({ user, tools, home, onFreeBrief }: Props) {
         ) : (
           <ul className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
             {shown.map((tool) => (
-              <ToolCard key={tool.id} tool={tool} />
+              <ToolCard key={tool.id} tool={tool} index={launchable.indexOf(tool)} />
             ))}
           </ul>
         )}
@@ -175,55 +177,37 @@ export function ToolsHome({ user, tools, home, onFreeBrief }: Props) {
 
 /* ------------------------------------------------------------------ */
 
-function ToolCard({ tool }: { tool: Tool }) {
+/**
+ * La card di uno strumento: il fondo shader del Brand Kit, l'icona, il tempo
+ * stimato, i formati, e in calce il pulsante di avvio con quanti campi ha
+ * e quante volte e' stato usato. Tutta la card porta al modulo.
+ */
+function ToolCard({ tool, index }: { tool: Tool; index: number }) {
+  const router = useRouter();
   const Icon = toolIcon(tool.slug);
-  const cover = tool.cover_image ? `/brand/${tool.cover_image}` : null;
   const formats = tool.default_formats.map((f) => FORMATS[f]?.label ?? f).join(" · ");
   return (
     <li>
-      <Link
-        href={`/studio/strumenti/${tool.slug}`}
-        className="tv-card group flex h-full flex-col overflow-hidden rounded-card-lg transition-[transform,box-shadow] hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
-        style={{ padding: 0 }}
-      >
-        <span
-          className="relative block h-[118px] w-full"
-          style={{
-            background: cover
-              ? `linear-gradient(180deg, rgb(114 0 38 / .25) 0%, rgb(114 0 38 / .88) 100%), url(${cover}) center/cover`
-              : "linear-gradient(180deg, var(--color-rose) 0%, var(--color-wine) 100%)",
-          }}
-          aria-hidden
-        >
-          <span className="absolute top-3 left-3 flex h-[38px] w-[38px] items-center justify-center rounded-[11px]" style={{ background: "rgba(255,255,255,.92)", color: "var(--color-wine)" }}>
-            <Icon size={18} strokeWidth={1.9} />
-          </span>
-          {tool.estimated_minutes ? (
-            <span className="tv-pill absolute top-3 right-3 h-[24px] gap-1 px-2.5 text-[11px]" style={{ background: "rgba(255,255,255,.92)", color: "var(--color-ink)" }}>
-              <Clock size={11} strokeWidth={2.2} />
-              {tool.estimated_minutes} min
+      <ShaderCard
+        title={tool.title}
+        description={`${tool.description}${formats ? ` · ${formats}` : ""}`}
+        icon={<Icon size={19} strokeWidth={1.9} />}
+        config={shaderConfigFor(index)}
+        badge={tool.estimated_minutes ? `${tool.estimated_minutes} min` : undefined}
+        className="h-[236px]"
+        onClick={() => router.push(`/studio/strumenti/${tool.slug}`)}
+        footer={
+          <>
+            <span className="flex items-center gap-1.5">
+              {tool.cta_label ?? "Apri"}
+              <ArrowRight size={14} strokeWidth={2.2} />
             </span>
-          ) : null}
-          <span className="absolute right-3 bottom-2.5 left-3 truncate text-[11px] font-semibold tracking-[0.04em] uppercase" style={{ color: "var(--color-on-wine)" }}>
-            {formats}
-          </span>
-        </span>
-        <span className="flex flex-1 flex-col gap-1.5 p-4">
-          <span className="text-[15.5px] font-semibold" style={{ color: "var(--color-ink)" }}>
-            {tool.title}
-          </span>
-          <span className="text-[12.5px] leading-[1.45]" style={{ color: "var(--color-ink-soft)" }}>
-            {tool.description}
-          </span>
-          <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-            <span>
-              {tool.fields.length} {tool.fields.length === 1 ? "campo da compilare" : "campi da compilare"}
+            <span className="ml-auto text-[11.5px] font-normal" style={{ color: "var(--color-on-wine)" }}>
+              {tool.fields.length} {tool.fields.length === 1 ? "campo" : "campi"} · usato {tool.run_count} volte
             </span>
-            <span>·</span>
-            <span>usato {tool.run_count} volte</span>
-          </span>
-        </span>
-      </Link>
+          </>
+        }
+      />
     </li>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ArrowRight, Check, ChevronDown, ChevronLeft, FileText, ImageIcon, Link2, Minus, Plus } from "lucide-react";
 import { FORMATS, FORMAT_ORDER, type FormatId } from "@/lib/brand";
 import { durationLabel, timeAgo } from "@/lib/format";
@@ -71,8 +71,17 @@ export function Composer({
   onImage,
   onHome,
 }: Props) {
-  const [step, setStep] = useState<Step>(activeTool ? (instruction.trim() ? 3 : 2) : 1);
+  // Dalla home si arriva per scrivere: lo strumento e' il brief libero e si
+  // parte dal passo 2, senza ripassare dalla griglia degli strumenti.
+  const fromHome = Boolean(onHome);
+  const [step, setStep] = useState<Step>(fromHome ? 2 : activeTool ? (instruction.trim() ? 3 : 2) : 1);
   const fieldId = useId();
+
+  useEffect(() => {
+    if (fromHome && !activeTool) onTool(FREE_BRIEF);
+    // Solo all'apertura: dopo, lo strumento lo sceglie chi scrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const tool = tools.find((t) => t.slug === activeTool) ?? null;
   const template = templates.find((t) => t.id === templateId) ?? templates[0] ?? null;
@@ -133,6 +142,7 @@ export function Composer({
       </header>
 
       {/* ---------------- 1 · gli strumenti ---------------- */}
+      {!fromHome ? (
       <StepCard
         number={1}
         title="Cosa vuoi creare?"
@@ -189,6 +199,7 @@ export function Composer({
           </button>
         </div>
       </StepCard>
+      ) : null}
 
       {/* ---------------- 2 · brief ---------------- */}
       <StepCard
@@ -263,8 +274,8 @@ export function Composer({
       <StepCard
         number={3}
         title="Formati e visual"
-        summary={tool ? step3Summary : null}
-        done={formatsDone && Boolean(tool)}
+        summary={chosen ? step3Summary : null}
+        done={formatsDone && chosen}
         open={step === 3}
         onOpen={() => setStep(3)}
       >
