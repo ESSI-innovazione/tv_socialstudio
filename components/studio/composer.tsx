@@ -116,7 +116,7 @@ export function Composer({
     .join(" · ");
 
   return (
-    <div className="mx-auto flex w-full max-w-[780px] flex-col gap-4 px-4 pt-6 md:px-8 md:pt-7">
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5 px-4 pt-6 md:px-8 md:pt-7">
       <header className="pb-1">
         {onHome ? (
           <button type="button" onClick={onHome} className="mb-2 flex cursor-pointer items-center gap-1 text-[12.5px] font-semibold" style={{ color: "var(--color-rose-ink)" }}>
@@ -212,10 +212,10 @@ export function Composer({
           id={fieldId}
           value={instruction}
           onChange={(e) => onInstruction(e.target.value)}
-          rows={7}
+          rows={10}
           spellCheck={false}
           placeholder="Di cosa parla la campagna? Misura, importi, scadenza, a chi si rivolge, tono, cosa deve fare chi legge."
-          className="tv-scroll mt-2 w-full resize-none rounded-[12px] px-4 py-3 text-[15px] leading-[1.6] outline-none transition-[border-color,box-shadow] focus:shadow-focus"
+          className="tv-scroll mt-2 w-full resize-none rounded-[12px] px-5 py-4 text-[16px] leading-[1.6] outline-none transition-[border-color,box-shadow] focus:shadow-focus"
           style={{
             border: "1px solid var(--color-line)",
             background: "var(--color-paper)",
@@ -388,7 +388,7 @@ function AttachmentChip({ attachment }: { attachment: Attachment }) {
   return (
     <span
       className="tv-pill h-[32px] gap-1.5 px-3 text-[12.5px]"
-      style={{ background: "var(--color-line-soft)", color: "var(--color-ink-soft)", fontWeight: 500 }}
+      style={{ background: "var(--color-paper)", color: "var(--color-ink-soft)", fontWeight: 500 }}
     >
       <Icon size={13} strokeWidth={1.9} style={{ color: "var(--color-rose)" }} />
       {attachment.label}

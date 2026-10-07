@@ -27,16 +27,19 @@ export function StepCard({ number, title, summary, done, open, onOpen, children 
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-card-lg bg-paper transition-[border-color,box-shadow]"
+      className="rounded-card-lg transition-[border-color,box-shadow,background-color]"
       style={{
         border: `1.5px solid ${open ? "var(--color-rose)" : "var(--color-line)"}`,
+        // Il passo aperto sta su un fondo vino tenue: e' dove si lavora, e
+        // si distingue a colpo d'occhio dai passi chiusi, bianchi.
+        background: open ? "var(--color-wine-tint)" : "var(--color-paper)",
         boxShadow: open ? "var(--shadow-card)" : "none",
       }}
     >
       {open ? (
-        <div className="flex items-center gap-3.5 px-5 pt-5 pb-1">
+        <div className="flex items-center gap-4 px-7 pt-7 pb-2">
           <StepBadge number={number} done={done} active />
-          <h2 id={headingId} className="text-[17px] font-semibold" style={{ color: "var(--color-ink)" }}>
+          <h2 id={headingId} className="text-[21px] font-semibold tracking-[-0.01em]" style={{ color: "var(--color-wine)" }}>
             {title}
           </h2>
         </div>
@@ -68,7 +71,7 @@ export function StepCard({ number, title, summary, done, open, onOpen, children 
         </button>
       )}
 
-      {open ? <div className="tv-anim-rise px-5 pt-3 pb-5">{children}</div> : null}
+      {open ? <div className="tv-anim-rise px-7 pt-4 pb-7">{children}</div> : null}
     </section>
   );
 }
@@ -77,7 +80,7 @@ function StepBadge({ number, done, active }: { number: number; done: boolean; ac
   const filled = done && !active;
   return (
     <span
-      className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-[13px] font-bold tabular-nums"
+      className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full text-[14px] font-bold tabular-nums"
       style={{
         background: filled ? "var(--color-success-bg)" : active ? "var(--color-wine)" : "var(--color-line-soft)",
         color: filled ? "var(--color-success)" : active ? "#ffffff" : "var(--color-ink-faint)",
