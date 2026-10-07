@@ -13,6 +13,7 @@ interface Props {
   variantCount: number;
   /** Il visual scelto, se c'e': riempie i fogli dell'anteprima. */
   photoUrl: string | null;
+  photoLabel: string | null;
   run: Run | null;
 }
 
@@ -21,14 +22,14 @@ interface Props {
  * ottenere, o cosa sta arrivando. I risultati hanno la loro colonna, dentro
  * alla pagina dei risultati.
  */
-export function RightRail({ state, formats, variantCount, photoUrl, run }: Props) {
+export function RightRail({ state, formats, variantCount, photoUrl, photoLabel, run }: Props) {
   return (
     <aside
       className="tv-scroll hidden w-[372px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5 lg:flex"
       style={{ borderLeft: "1px solid var(--color-line)" }}
       aria-label="Anteprima"
     >
-      {state === "composing" ? <Sheets formats={formats} variantCount={variantCount} photoUrl={photoUrl} /> : null}
+      {state === "composing" ? <Sheets formats={formats} variantCount={variantCount} photoUrl={photoUrl} photoLabel={photoLabel} /> : null}
       {state === "running" ? <RunningRail run={run} /> : null}
     </aside>
   );
@@ -43,9 +44,26 @@ export function RightRail({ state, formats, variantCount, photoUrl, run }: Props
  * sceglie un visual, il visual entra nei fogli. E' l'unico posto in cui la
  * composizione mostra qualcosa di concreto prima di eseguire.
  */
-function Sheets({ formats, variantCount, photoUrl }: { formats: FormatId[]; variantCount: number; photoUrl: string | null }) {
+function Sheets({ formats, variantCount, photoUrl, photoLabel }: { formats: FormatId[]; variantCount: number; photoUrl: string | null; photoLabel: string | null }) {
   return (
     <section>
+      {/* Il visual scelto o appena generato, grande: nei fogli qui sotto e'
+          un francobollo, e chi lo ha appena creato vuole vederlo davvero. */}
+      {photoUrl ? (
+        <figure className="mb-5">
+          <p className="tv-label pb-3">VISUAL</p>
+          <div className="overflow-hidden rounded-card" style={{ border: "1px solid var(--color-line)", background: "var(--color-line-soft)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoUrl} alt={photoLabel ?? "Visual scelto"} className="block aspect-[4/3] w-full object-cover" />
+          </div>
+          {photoLabel ? (
+            <figcaption className="pt-2 text-[12.5px]" style={{ color: "var(--color-ink-soft)" }}>
+              {photoLabel}
+            </figcaption>
+          ) : null}
+        </figure>
+      ) : null}
+
       <p className="tv-label pb-3">COSA OTTERRAI</p>
       {formats.length === 0 ? (
         <p className="rounded-card px-3.5 py-3 text-[13px] leading-[1.5]" style={{ background: "var(--color-line-soft)", color: "var(--color-ink-soft)" }}>

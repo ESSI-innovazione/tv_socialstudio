@@ -336,7 +336,7 @@ export function StudioShell({ user, tools, campaigns, campaignId, templates, rec
           ) : null}
         </main>
 
-        {showRail ? <RightRail state={state} formats={formats} variantCount={variantCount} photoUrl={image?.url ?? null} run={run} /> : null}
+        {showRail ? <RightRail state={state} formats={formats} variantCount={variantCount} photoUrl={image?.url ?? null} photoLabel={image?.label ?? null} run={run} /> : null}
     </div>
   );
 }
