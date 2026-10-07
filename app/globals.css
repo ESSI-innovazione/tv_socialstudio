@@ -95,9 +95,11 @@
     font-weight: 600;
   }
 
+  /* Le card stanno su un vino tenue, non sul bianco: cosi' si staccano dalla
+     tela e i controlli bianchi al loro interno risaltano. */
   .tv-card {
-    background: var(--color-paper);
-    border: 1px solid var(--color-line);
+    background: var(--color-wine-tint);
+    border: 1px solid var(--color-wine-edge);
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
   }
