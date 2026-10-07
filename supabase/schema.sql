@@ -10,12 +10,32 @@ create table if not exists profiles (
   id          uuid primary key default gen_random_uuid(),
   email       text unique not null,
   name        text,
-  role        text not null default 'editor' check (role in ('editor','approver')),
+  role        text not null default 'editor' check (role in ('editor','designer','approver')),
   created_at  timestamptz not null default now()
 );
 
 comment on column profiles.role is
-  'editor esegue e salva bozze; approver puo pubblicare.';
+  'editor crea e chiede approvazione; designer in piu sincronizza i template; approver approva, pubblica e modifica gli strumenti.';
+
+-- Amministrazione e accessi (migrazione 011).
+alter table profiles add column if not exists is_admin     boolean not null default false;
+alter table profiles add column if not exists invited_by   text;
+alter table profiles add column if not exists invited_at   timestamptz;
+alter table profiles add column if not exists last_seen_at timestamptz;
+alter table profiles add column if not exists active       boolean not null default true;
+
+create table if not exists profile_events (
+  id          uuid primary key default gen_random_uuid(),
+  profile_id  uuid not null references profiles(id) on delete cascade,
+  email       text not null,
+  changed_by  text not null,
+  field       text not null check (field in ('role','is_admin','active','invited')),
+  from_value  text,
+  to_value    text,
+  at          timestamptz not null default now()
+);
+
+create index if not exists profile_events_profile_idx on profile_events (profile_id, at desc);
 
 -- Solo il dominio aziendale entra.
 alter table profiles drop constraint if exists profiles_email_domain;
@@ -195,3 +215,4 @@ alter table runs            enable row level security;
 alter table assets          enable row level security;
 alter table approvals       enable row level security;
 alter table scheduled_posts enable row level security;
+alter table profile_events  enable row level security;

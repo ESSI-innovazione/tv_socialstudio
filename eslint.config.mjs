@@ -32,6 +32,9 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // I test e gli script di servizio sono CommonJS per scelta: girano con
+      // `node` sul JavaScript emesso da tsc, senza bundler.
+      "scripts/**",
     ],
   },
 ];

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, CircleAlert, Clock, LoaderCircle, Lock, RotateCcw, Send, Undo2 } from "lucide-react";
 import { timeAgo } from "@/lib/format";
+import { can } from "@/lib/permissions";
 import type { Approval, Asset, Run } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 
@@ -99,7 +100,7 @@ export function ApprovalStep({ run, selected, guardOk, user, onAssets, onStatus 
     }
   };
 
-  const approver = user.role === "approver";
+  const approver = can(user, "approve");
 
   /* ---------------- approvata ---------------- */
   if (latest?.status === "approved") {

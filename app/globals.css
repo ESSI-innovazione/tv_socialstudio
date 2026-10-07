@@ -114,6 +114,72 @@
   }
 }
 
+@layer components {
+  /* La barra laterale vino. Sotto i 900px si ripiega in una barra in alto
+     con un pulsante, e la colonna scorre da sinistra quando la si apre. */
+  .tv-shell {
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .tv-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 248px;
+    flex-shrink: 0;
+    background: var(--color-wine);
+    color: var(--color-on-wine);
+  }
+
+  .tv-topbar {
+    display: none;
+  }
+
+  .tv-sidebar-scrim {
+    display: none;
+  }
+
+  @media (max-width: 899px) {
+    .tv-shell {
+      flex-direction: column;
+    }
+
+    .tv-topbar {
+      display: flex;
+    }
+
+    .tv-sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 60;
+      width: min(300px, 86vw);
+      transform: translateX(-100%);
+      transition: transform 0.22s ease-out;
+      box-shadow: 0 20px 60px -20px rgb(0 0 0 / 0.6);
+    }
+
+    .tv-sidebar[data-open="true"] {
+      transform: none;
+    }
+
+    .tv-sidebar-scrim[data-open="true"] {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: rgb(26 10 17 / 0.55);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tv-sidebar {
+      transition: none;
+    }
+  }
+}
+
 @layer utilities {
   .tv-scroll {
     scrollbar-width: thin;

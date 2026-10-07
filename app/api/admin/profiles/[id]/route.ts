@@ -1,6 +1,8 @@
-import { readJson, requireApprover } from "@/lib/admin";
+import { readJson, requireCan } from "@/lib/admin";
 import { listProfiles, updateProfile } from "@/lib/db";
 import type { Role } from "@/lib/types";
+
+const requireApprover = () => requireCan("manageTeam");
 
 /**
  * Cambio di ruolo o di nome di un collega. L'ultimo approvatore non puo'

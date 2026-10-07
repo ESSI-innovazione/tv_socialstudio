@@ -1,7 +1,9 @@
-import { readJson, requireApprover } from "@/lib/admin";
+import { readJson, requireCan } from "@/lib/admin";
 import { createProfile, getProfileByEmail, listProfiles } from "@/lib/db";
 import { ALLOWED_EMAIL_DOMAIN } from "@/lib/env";
 import type { Role } from "@/lib/types";
+
+const requireApprover = () => requireCan("manageTeam");
 
 /**
  * Il team: elenco e aggiunta di un collega. Solo l'indirizzo aziendale

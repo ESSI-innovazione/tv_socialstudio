@@ -3,6 +3,7 @@ import { currentUser } from "@/auth";
 import { ApprovalQueue, type QueueItem } from "@/components/studio/approval-queue";
 import { PageFrame } from "@/components/studio/page-frame";
 import { getCampaigns, getRun, listApprovals } from "@/lib/db";
+import { can } from "@/lib/permissions";
 import type { Approval } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function ApprovazioniPage() {
   const user = await currentUser();
   if (!user) redirect("/");
-  if (user.role !== "approver") redirect("/studio");
+  if (!can(user, "approve")) redirect("/studio");
 
   const [pending, approved, rejected, campaigns] = await Promise.all([
     listApprovals("pending"),

@@ -4,6 +4,7 @@ import { PageFrame } from "@/components/studio/page-frame";
 import { ProfilesAdmin } from "@/components/studio/profiles-admin";
 import { ToolsAdmin } from "@/components/studio/tools-admin";
 import { getTools, listProfiles } from "@/lib/db";
+import { can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const user = await currentUser();
   if (!user) redirect("/");
-  if (user.role !== "approver") redirect("/studio");
+  if (!can(user, "editTools") && !can(user, "manageTeam")) redirect("/studio");
 
   const [profiles, tools] = await Promise.all([listProfiles(), getTools()]);
 

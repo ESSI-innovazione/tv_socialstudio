@@ -10,23 +10,22 @@ import type { Asset, Campaign, Run, RunState, Template, Tool, VariantCopy } from
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
-import { studioNav } from "./nav";
 import { Results } from "./results";
 import { RightRail } from "./right-rail";
 import { RunMonitor } from "./run-monitor";
-import { TopBar } from "./top-bar";
 
 interface Props {
   user: StudioUser;
   tools: Tool[];
   campaigns: Campaign[];
+  /** La campagna attiva, scelta nella barra laterale e letta dal cookie. */
+  campaignId: string | null;
   templates: Template[];
   recentRuns: Run[];
   /** Esecuzione ripristinata dal server dopo un refresh, se c'e'. */
   initialRun: Run | null;
   /** Falso finche' le integrazioni girano sui mock. */
   channelsLive: boolean;
-  figmaSyncedAt: string | null;
 }
 
 /**
@@ -39,7 +38,7 @@ interface Props {
  * Ogni ritocco al testo viene salvato poco dopo, cosi' lo storico e
  * l'archivio mostrano quello che si vede qui.
  */
-export function StudioShell({ user, tools, campaigns, templates, recentRuns, initialRun, channelsLive, figmaSyncedAt }: Props) {
+export function StudioShell({ user, tools, campaignId, templates, recentRuns, initialRun, channelsLive }: Props) {
   const restorable = initialRun && initialRun.variants.length > 0 ? initialRun : null;
 
   const [state, setState] = useState<RunState>(restorable ? restorable.state : "composing");
@@ -80,7 +79,6 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
   const [attachments] = useState(SAMPLE_ATTACHMENTS);
   const [variantCount, setVariantCount] = useState(3);
   const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
-  const [campaignId, setCampaignId] = useState<string | null>(campaigns.find((c) => c.active)?.id ?? campaigns[0]?.id ?? null);
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearTimers = useCallback(() => {
@@ -226,18 +224,7 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
     setRun((prev) => (prev ? { ...prev, variants: prev.variants.map((v) => (v.index === index ? { ...v, ...patch } : v)) } : prev));
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <TopBar
-        user={user}
-        nav={studioNav(user.role)}
-        campaigns={campaigns}
-        campaignId={campaignId}
-        onCampaign={setCampaignId}
-        figmaSyncedAt={figmaSyncedAt}
-        brandKit="Brand Kit 2026"
-      />
-
-      <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-canvas">
         <main className="tv-scroll min-w-0 flex-1 overflow-y-auto">
           {state === "composing" ? (
             <Composer
@@ -292,7 +279,6 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
           layouts={layouts}
           onAssets={mergeAssets}
         />
-      </div>
     </div>
   );
 }

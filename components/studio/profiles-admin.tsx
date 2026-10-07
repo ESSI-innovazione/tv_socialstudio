@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, UserPlus } from "lucide-react";
+import { ROLE_LABEL } from "@/lib/permissions";
 import type { Profile, Role } from "@/lib/types";
 
 interface Props {
   profiles: Profile[];
   me: string;
 }
-
-const ROLE_LABEL: Record<Role, string> = { editor: "Editor", approver: "Approvatore" };
 
 /**
  * Il team: una riga per persona con il ruolo modificabile sul posto, e il

@@ -1,5 +1,6 @@
 import { currentUser } from "@/auth";
 import { ApprovalError, decide } from "@/lib/approvals";
+import { can } from "@/lib/permissions";
 
 /**
  * La decisione di un approvatore: approva, oppure rimanda indietro con un
@@ -12,7 +13,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return Response.json({ error: "Non autorizzato" }, { status: 401 });
-  if (user.role !== "approver") return Response.json({ error: "Solo un approvatore puo' decidere." }, { status: 403 });
+  if (!can(user, "approve")) return Response.json({ error: "Solo un approvatore puo' decidere." }, { status: 403 });
 
   const { id } = await context.params;
 

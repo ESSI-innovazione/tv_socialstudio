@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { BRAND, FORMATS, type FormatId } from "@/lib/brand";
 import { DEFAULT_FONT, FONTS, FONT_IDS, fontFamilyFor } from "@/lib/fonts";
+import { can } from "@/lib/permissions";
 import {
   BLOCK_LABELS,
   encodeLayout,
@@ -693,7 +694,7 @@ const SLACK_CHANNELS = ["#marketing", "#direzione", "#commerciale"];
 
 function PublishPanel({ run, user, channelsLive }: { run: Run; user: StudioUser; channelsLive: boolean }) {
   const blocked = run.guard.some((c) => c.status === "fail");
-  const approver = user.role === "approver";
+  const approver = can(user, "publish");
   const linkedin = run.captions.find((c) => c.channel === "linkedin") ?? null;
   const instagram = run.captions.find((c) => c.channel === "instagram") ?? null;
 

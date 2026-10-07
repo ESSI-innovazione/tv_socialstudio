@@ -1,22 +1,31 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 import { ALLOWED_EMAIL_DOMAIN, authConfigured, env } from "@/lib/env";
-import { getProfileByEmail } from "@/lib/db";
+import { getProfileByEmail, touchProfileSeen } from "@/lib/db";
 import type { Role } from "@/lib/types";
 
 declare module "next-auth" {
   interface Session {
-    user: { role: Role } & DefaultSession["user"];
+    user: { role: Role; isAdmin: boolean } & DefaultSession["user"];
   }
+}
+
+/** Quanto spesso, al massimo, si scrive l'ultimo accesso di una persona. */
+const SEEN_EVERY_MS = 60 * 60_000;
+
+/** Vero se l'indirizzo e' fra quelli nominati admin dall'ambiente. */
+function bootstrapAdmin(email: string): boolean {
+  return env.adminEmails.includes(email.toLowerCase());
 }
 
 /**
  * Google OAuth ristretto al dominio @timevision.it. Chiunque altro viene
- * respinto nella callback, prima che esista una sessione.
+ * respinto nella callback, prima che esista una sessione; chi ha un profilo
+ * disattivato viene rimandato alla porta con un messaggio chiaro.
  *
  * Senza credenziali Google configurate l'app resta usabile in sviluppo:
- * `devSession()` fornisce un editor fittizio. In produzione, con le chiavi
- * presenti, quel percorso non viene mai raggiunto.
+ * `currentUser()` fornisce la persona di sviluppo. In produzione, con le
+ * chiavi presenti, quel percorso non viene mai raggiunto.
  */
 const { handlers, auth: nextAuth, signIn, signOut } = NextAuth({
   providers: authConfigured
@@ -38,6 +47,9 @@ const { handlers, auth: nextAuth, signIn, signOut } = NextAuth({
       if (!email) return false;
       // Il claim `hd` di Google e' un suggerimento: l'indirizzo e' la verita'.
       if (!email.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) return false;
+      // Un accesso tolto si rispetta anche se Google lo farebbe entrare.
+      const stored = await getProfileByEmail(email);
+      if (stored && stored.active === false) return "/?error=Disattivato";
       return true;
     },
     async jwt({ token, profile }) {
@@ -46,6 +58,16 @@ const { handlers, auth: nextAuth, signIn, signOut } = NextAuth({
         token.email = email;
         const stored = await getProfileByEmail(email);
         token.role = stored?.role ?? "editor";
+        token.isAdmin = Boolean(stored?.is_admin) || bootstrapAdmin(email);
+
+        // L'ultimo accesso si scrive al piu' una volta l'ora: il token
+        // ricorda quando l'ha fatto, cosi' non si tocca il database a ogni
+        // richiesta.
+        const seenAt = typeof token.seenAt === "number" ? token.seenAt : 0;
+        if (stored && Date.now() - seenAt > SEEN_EVERY_MS) {
+          await touchProfileSeen(stored.id);
+          token.seenAt = Date.now();
+        }
       }
       return token;
     },
@@ -53,6 +75,7 @@ const { handlers, auth: nextAuth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.email = (token.email as string) ?? session.user.email;
         session.user.role = (token.role as Role) ?? "editor";
+        session.user.isAdmin = Boolean(token.isAdmin);
       }
       return session;
     },
@@ -65,6 +88,8 @@ export interface StudioUser {
   email: string;
   name: string;
   role: Role;
+  /** Gestisce il team. Separato dal ruolo: vedi lib/permissions.ts. */
+  isAdmin: boolean;
   /** Iniziali per l'avatar in barra. */
   initials: string;
 }
@@ -79,16 +104,20 @@ function initialsOf(name: string, email: string): string {
 
 /**
  * Utente corrente per la console. Quando l'autenticazione non e' ancora
- * configurata restituisce un editor di sviluppo, cosi' la console gira
- * end-to-end prima che esista una credenziale.
+ * configurata restituisce la persona di sviluppo, con il ruolo che ha nel
+ * profilo seminato: cosi' anche la pagina del team si prova end-to-end.
  */
 export async function currentUser(): Promise<StudioUser | null> {
   if (!authConfigured) {
+    const email = `demo@${ALLOWED_EMAIL_DOMAIN}`;
+    const stored = await getProfileByEmail(email);
+    const name = stored?.name ?? "Giulia Rossi";
     return {
-      email: `demo@${ALLOWED_EMAIL_DOMAIN}`,
-      name: "Giulia Rossi",
-      role: "approver",
-      initials: "GR",
+      email,
+      name,
+      role: stored?.role ?? "approver",
+      isAdmin: stored ? stored.is_admin || bootstrapAdmin(email) : true,
+      initials: initialsOf(name, email),
     };
   }
 
@@ -101,6 +130,7 @@ export async function currentUser(): Promise<StudioUser | null> {
     email,
     name,
     role: session?.user?.role ?? "editor",
+    isAdmin: session?.user?.isAdmin ?? bootstrapAdmin(email),
     initials: initialsOf(name, email),
   };
 }

@@ -12,6 +12,7 @@ import {
 } from "./db";
 import { env } from "./env";
 import { sendMail } from "./mail";
+import { can } from "./permissions";
 import type { Approval, Asset, Run } from "./types";
 
 /**
@@ -86,7 +87,7 @@ export async function decide(
   approver: StudioUser,
   comment: string | null,
 ): Promise<{ approval: Approval; assets: Asset[]; mailed: boolean }> {
-  if (approver.role !== "approver") throw new ApprovalError("Solo un approvatore puo' decidere.", 403);
+  if (!can(approver, "approve")) throw new ApprovalError("Solo un approvatore puo' decidere.", 403);
 
   const existing = await getApproval(approvalId);
   if (!existing) throw new ApprovalError("Richiesta non trovata", 404);

@@ -1,6 +1,7 @@
 import { currentUser } from "@/auth";
 import { ApprovalError, decide, requestApproval } from "@/lib/approvals";
 import { getApprovals, getRun } from "@/lib/db";
+import { can } from "@/lib/permissions";
 
 /**
  * Le richieste di approvazione.
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     if (payload.autoApprove === true) {
       // Il ruolo lo controlla `decide`: un editor che lo chiede riceve un 403
       // e la richiesta resta in attesa, come se non l'avesse chiesto.
-      if (user.role !== "approver") {
+      if (!can(user, "approve")) {
         return Response.json({ error: "Solo un approvatore puo' approvare subito.", approval: requested.approval }, { status: 403 });
       }
       const decided = await decide(requested.approval.id, "approved", user, note);

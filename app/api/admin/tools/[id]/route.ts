@@ -1,6 +1,8 @@
-import { readJson, requireApprover } from "@/lib/admin";
+import { readJson, requireCan } from "@/lib/admin";
 import { FORMATS, type FormatId } from "@/lib/brand";
 import { getTools, updateTool } from "@/lib/db";
+
+const requireApprover = () => requireCan("editTools");
 
 /**
  * Modifica di uno strumento salvato: titolo, descrizione, istruzione e

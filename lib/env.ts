@@ -78,6 +78,17 @@ export const env = {
   get chromePath() {
     return read("CHROME_PATH");
   },
+  /**
+   * Chi amministra il team il primo giorno, prima che esista un profilo con
+   * la spunta. Indirizzi separati da virgola: cosi' nessuno deve aprire il
+   * SQL Editor per nominare il primo admin.
+   */
+  get adminEmails(): string[] {
+    return (read("STUDIO_ADMIN_EMAILS") ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },

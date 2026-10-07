@@ -142,6 +142,9 @@ function errorMessage(code: string): string {
   if (code === "AccessDenied") {
     return `Quell'account non e' del dominio @${ALLOWED_EMAIL_DOMAIN}. Lo Studio e' riservato al team Time Vision.`;
   }
+  if (code === "Disattivato") {
+    return "Il tuo accesso allo Studio e' stato tolto. Se pensi sia un errore, chiedi a chi amministra il team.";
+  }
   if (code === "Configuration") {
     return "L'accesso Google non e' configurato correttamente. Avvisa chi gestisce lo Studio.";
   }

@@ -6,6 +6,7 @@ import type {
   Asset,
   Campaign,
   Profile,
+  ProfileEvent,
   Role,
   Run,
   RunState,
@@ -44,6 +45,7 @@ export const usingMemoryStore = !supabaseConfigured;
 
 interface MemoryStore {
   profiles: Profile[];
+  profileEvents: ProfileEvent[];
   campaigns: Campaign[];
   tools: Tool[];
   templates: Template[];
@@ -99,12 +101,23 @@ export async function listProfiles(): Promise<Profile[]> {
 }
 
 /** Un collega nuovo. Con un profilo puo' entrare con Google da subito. */
-export async function createProfile(input: { email: string; name: string | null; role: Role }): Promise<Profile> {
+export async function createProfile(input: {
+  email: string;
+  name: string | null;
+  role: Role;
+  is_admin?: boolean;
+  invited_by?: string | null;
+}): Promise<Profile> {
   const row: Profile = {
     id: crypto.randomUUID(),
     email: input.email,
     name: input.name,
     role: input.role,
+    is_admin: input.is_admin ?? false,
+    invited_by: input.invited_by ?? null,
+    invited_at: input.invited_by ? new Date().toISOString() : null,
+    last_seen_at: null,
+    active: true,
     created_at: new Date().toISOString(),
   };
 
@@ -119,7 +132,60 @@ export async function createProfile(input: { email: string; name: string | null;
   return data as Profile;
 }
 
-export async function updateProfile(id: string, patch: Partial<Pick<Profile, "role" | "name">>): Promise<Profile | null> {
+export async function getProfileById(id: string): Promise<Profile | null> {
+  const supabase = db();
+  if (!supabase) return memory().profiles.find((p) => p.id === id) ?? null;
+
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[db] getProfileById", error.message);
+    return null;
+  }
+  return (data as Profile) ?? null;
+}
+
+/** L'ultimo accesso. Lo chiama la sessione, al piu' una volta l'ora. */
+export async function touchProfileSeen(id: string): Promise<void> {
+  const at = new Date().toISOString();
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().profiles.find((p) => p.id === id);
+    if (row) row.last_seen_at = at;
+    return;
+  }
+  const { error } = await supabase.from("profiles").update({ last_seen_at: at }).eq("id", id);
+  if (error) console.error("[db] touchProfileSeen", error.message);
+}
+
+/** Ogni cambio di ruolo, spunta o accesso resta scritto: chi, quando, da cosa a cosa. */
+export async function logProfileEvent(input: Omit<ProfileEvent, "id" | "at">): Promise<ProfileEvent> {
+  const row: ProfileEvent = { id: crypto.randomUUID(), at: new Date().toISOString(), ...input };
+  const supabase = db();
+  if (!supabase) {
+    memory().profileEvents.push(row);
+    return row;
+  }
+  const { error } = await supabase.from("profile_events").insert(row);
+  if (error) console.error("[db] logProfileEvent", error.message);
+  return row;
+}
+
+export async function listProfileEvents(limit = 50): Promise<ProfileEvent[]> {
+  const supabase = db();
+  if (!supabase) return [...memory().profileEvents].sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
+
+  const { data, error } = await supabase.from("profile_events").select("*").order("at", { ascending: false }).limit(limit);
+  if (error) {
+    console.error("[db] listProfileEvents", error.message);
+    return [];
+  }
+  return data as ProfileEvent[];
+}
+
+export async function updateProfile(
+  id: string,
+  patch: Partial<Pick<Profile, "role" | "name" | "is_admin" | "active" | "invited_at">>,
+): Promise<Profile | null> {
   const supabase = db();
   if (!supabase) {
     const row = memory().profiles.find((p) => p.id === id);
@@ -622,17 +688,18 @@ export async function markAssetsApproved(
   return data as Asset[];
 }
 
-/** Chi puo' approvare: riceve le richieste via email. */
+/** Chi puo' approvare: riceve le richieste via email. Gli admin approvano anche loro. */
 export async function listApprovers(): Promise<Profile[]> {
+  const approves = (p: Profile) => p.active !== false && (p.role === "approver" || p.is_admin);
   const supabase = db();
-  if (!supabase) return memory().profiles.filter((p) => p.role === "approver");
+  if (!supabase) return memory().profiles.filter(approves);
 
-  const { data, error } = await supabase.from("profiles").select("*").eq("role", "approver");
+  const { data, error } = await supabase.from("profiles").select("*").or("role.eq.approver,is_admin.eq.true");
   if (error) {
     console.error("[db] listApprovers", error.message);
     return [];
   }
-  return data as Profile[];
+  return (data as Profile[]).filter(approves);
 }
 
 /* ------------------------------------------------------------------ */

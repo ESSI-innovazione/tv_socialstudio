@@ -1,9 +1,10 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/auth";
 import { StudioShell } from "@/components/studio/studio-shell";
+import { activeCampaignId, CAMPAIGN_COOKIE } from "@/lib/campaign-cookie";
 import { getCampaigns, getLatestRun, getRun, getTemplates, getTools, listRuns } from "@/lib/db";
 import { env } from "@/lib/env";
-import { timeAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
 
   const { run: requestedId } = await searchParams;
 
-  const [tools, campaigns, templates, recentRuns, latestRun] = await Promise.all([
+  const [tools, campaigns, templates, recentRuns, latestRun, jar] = await Promise.all([
     getTools(),
     getCampaigns(),
     getTemplates(),
@@ -21,9 +22,8 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
     // `?run=` riapre un lavoro preciso — dallo storico o dall'archivio —
     // altrimenti la console ripristina l'ultimo della persona.
     requestedId ? getRun(requestedId) : getLatestRun(user.email),
+    cookies(),
   ]);
-
-  const synced = templates.find((t) => t.synced_at)?.synced_at ?? null;
 
   return (
     <StudioShell
@@ -31,11 +31,11 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
       user={user}
       tools={tools}
       campaigns={campaigns}
+      campaignId={activeCampaignId(campaigns, jar.get(CAMPAIGN_COOKIE)?.value)}
       templates={templates}
       recentRuns={recentRuns}
       initialRun={latestRun}
       channelsLive={Boolean(env.linkedinToken && env.igToken)}
-      figmaSyncedAt={synced ? timeAgo(synced) : "mai sincronizzato"}
     />
   );
 }

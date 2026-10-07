@@ -124,6 +124,12 @@ const PROFILES: Profile[] = [
     email: "demo@timevision.it",
     name: "Giulia Rossi",
     role: "approver",
+    // La persona di sviluppo amministra: cosi' il team si prova senza chiavi.
+    is_admin: true,
+    invited_by: null,
+    invited_at: null,
+    last_seen_at: new Date().toISOString(),
+    active: true,
     created_at: new Date("2026-01-12").toISOString(),
   },
 ];
@@ -183,6 +189,7 @@ const POSTS: ScheduledPost[] = [];
 
 export const MEMORY_SEED = {
   profiles: PROFILES,
+  profileEvents: [],
   campaigns: CAMPAIGNS,
   tools: TOOLS,
   templates: TEMPLATES,

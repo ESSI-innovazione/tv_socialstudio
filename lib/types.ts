@@ -5,14 +5,34 @@ import type { AssetLayout } from "./layout-model";
 /* Ruoli e profili                                                      */
 /* ------------------------------------------------------------------ */
 
-export type Role = "editor" | "approver";
+export type Role = "editor" | "designer" | "approver";
 
 export interface Profile {
   id: string;
   email: string;
   name: string | null;
   role: Role;
+  /** Gestisce il team. Una spunta separata dal ruolo. */
+  is_admin: boolean;
+  invited_by: string | null;
+  invited_at: string | null;
+  /** L'ultimo accesso, aggiornato al piu' una volta l'ora. Null finche' non entra. */
+  last_seen_at: string | null;
+  /** Falso quando l'accesso e' stato tolto. Il lavoro resta. */
+  active: boolean;
   created_at: string;
+}
+
+/** Un cambio di ruolo, di spunta admin o di accesso: chi, quando, da cosa a cosa. */
+export interface ProfileEvent {
+  id: string;
+  profile_id: string;
+  email: string;
+  changed_by: string;
+  field: "role" | "is_admin" | "active" | "invited";
+  from_value: string | null;
+  to_value: string | null;
+  at: string;
 }
 
 /* ------------------------------------------------------------------ */
