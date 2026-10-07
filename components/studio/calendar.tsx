@@ -323,9 +323,9 @@ export function Calendar({ items, ready, channels, canPublish }: Props) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ---------------- griglia ---------------- */}
-        <div className="tv-scroll tv-card min-w-0 overflow-x-auto" style={{ padding: 0 }}>
+        <div className="tv-scroll tv-card min-w-0 overflow-x-auto" style={{ padding: 0, background: "var(--color-wine-tint)", borderColor: "var(--color-wine-edge)" }}>
           <div style={{ minWidth: view === "settimana" ? 980 : 760 }}>
-            <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--color-line)" }}>
+            <div className="grid grid-cols-7" style={{ borderBottom: "1px solid var(--color-wine-edge)", background: "var(--color-paper)" }}>
               {DAYS.map((d) => (
                 <div key={d} className="tv-label px-3 py-2">
                   {d.toUpperCase()}
@@ -357,9 +357,10 @@ export function Calendar({ items, ready, channels, canPublish }: Props) {
                     }}
                     className="flex min-w-0 flex-col gap-1.5 p-1.5 transition-colors"
                     style={{
-                      borderRight: (i + 1) % 7 === 0 ? "none" : "1px solid var(--color-line-soft)",
-                      borderBottom: "1px solid var(--color-line-soft)",
-                      background: isTarget ? "var(--color-warm-tint)" : isToday ? "var(--color-wine-tint)" : outside ? "var(--color-canvas)" : "var(--color-paper)",
+                      borderRight: (i + 1) % 7 === 0 ? "none" : "1px solid var(--color-wine-edge)",
+                      borderBottom: "1px solid var(--color-wine-edge)",
+                      // Il fondo e' vino tenue: le card bianche dei post risaltano, oggi e' un vino piu' pieno.
+                      background: isTarget ? "var(--color-warm-tint)" : isToday ? "var(--color-wine-edge)" : outside ? "var(--color-canvas)" : "var(--color-wine-tint)",
                     }}
                   >
                     <span className="px-1 text-[12px] tabular-nums" style={{ color: isToday ? "var(--color-wine)" : outside ? "var(--color-ink-faint)" : "var(--color-ink-soft)", fontWeight: isToday ? 700 : 500 }}>
@@ -388,7 +389,7 @@ export function Calendar({ items, ready, channels, canPublish }: Props) {
                       />
                     ))}
                     {view === "settimana" && list.length === 0 ? (
-                      <span className="mt-auto rounded-[8px] px-2 py-4 text-center text-[11.5px] leading-[1.4]" style={{ border: "1.5px dashed var(--color-line)", color: "var(--color-ink-faint)" }}>
+                      <span className="mt-auto rounded-[8px] px-2 py-4 text-center text-[11.5px] leading-[1.4]" style={{ border: "1.5px dashed var(--color-wine-edge)", background: "rgb(255 255 255 / .55)", color: "var(--color-ink-faint)" }}>
                         Trascina qui un post pronto
                       </span>
                     ) : null}
