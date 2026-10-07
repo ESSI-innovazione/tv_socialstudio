@@ -17,6 +17,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
     "@base-ui/react": "^1.8.0",
+    "@paper-design/shaders-react": "^0.0.81",
     "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.115.0",
     "@vercel/blob": "^2.8.0",

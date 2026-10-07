@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ChevronDown, FileText, ImageIcon, Link2, Minus, Plus } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, FileText, ImageIcon, Link2, Minus, Plus } from "lucide-react";
 import { FORMATS, FORMAT_ORDER, type FormatId } from "@/lib/brand";
 import { durationLabel, timeAgo } from "@/lib/format";
 import type { Attachment, Run, Template, Tool } from "@/lib/types";
@@ -10,6 +10,7 @@ import { ImagePicker } from "./image-picker";
 import { RunBar } from "./run-bar";
 import { StepCard } from "./step-card";
 import { toolIcon } from "./tool-icons";
+import { ShaderCard, shaderConfigFor } from "@/components/ui/feature-shader-cards";
 
 interface Props {
   instruction: string;
@@ -133,11 +134,11 @@ export function Composer({
       >
         <p className="tv-label pb-2.5">STRUMENTI SALVATI</p>
         <div className="grid grid-cols-3 gap-3">
-          {tools.map((t) =>
+          {tools.map((t, index) =>
             t.automatic ? (
-              <AutomaticToolCard key={t.id} tool={t} />
+              <AutomaticToolCard key={t.id} tool={t} index={index} />
             ) : (
-              <ToolCard key={t.id} tool={t} active={t.slug === activeTool} onPick={() => pickTool(t.slug)} />
+              <ToolCard key={t.id} tool={t} index={index} active={t.slug === activeTool} onPick={() => pickTool(t.slug)} />
             ),
           )}
         </div>
@@ -331,64 +332,45 @@ export function Composer({
 
 /* ------------------------------------------------------------------ */
 
-function ToolCard({ tool, active, onPick }: { tool: Tool; active: boolean; onPick: () => void }) {
+/** Uno strumento lanciabile: fondo shader del brand, icona, titolo, descrizione. */
+function ToolCard({ tool, index, active, onPick }: { tool: Tool; index: number; active: boolean; onPick: () => void }) {
   const Icon = toolIcon(tool.slug);
   return (
-    <button
-      type="button"
+    <ShaderCard
+      title={tool.title}
+      description={tool.description}
+      icon={<Icon size={19} strokeWidth={1.9} />}
+      config={shaderConfigFor(index)}
+      active={active}
       onClick={onPick}
-      aria-pressed={active}
-      className="flex cursor-pointer items-start gap-3.5 rounded-card p-4 text-left transition-[border-color,background-color] hover:bg-line-soft"
-      style={{
-        border: `1.5px solid ${active ? "var(--color-rose)" : "var(--color-line)"}`,
-        background: active ? "var(--color-wine-tint)" : "var(--color-paper)",
-      }}
-    >
-      <span
-        className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px]"
-        style={{
-          background: active ? "var(--color-wine)" : "var(--color-line-soft)",
-          color: active ? "#ffffff" : "var(--color-wine)",
-        }}
-      >
-        <Icon size={19} strokeWidth={1.9} />
-      </span>
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="text-[15px] font-semibold" style={{ color: "var(--color-ink)" }}>
-          {tool.title}
-        </span>
-        <span className="text-[12.5px] leading-[1.45]" style={{ color: "var(--color-ink-soft)" }}>
-          {tool.description}
-        </span>
-      </span>
-    </button>
+      className="h-[196px]"
+      footer={
+        <>
+          <span className="mr-1.5">{active ? "Scelto" : "Scegli"}</span>
+          {active ? <Check size={14} strokeWidth={2.6} /> : <ArrowRight size={14} strokeWidth={2.4} />}
+          <span className="tv-mono ml-auto text-[11px] font-normal" style={{ color: "rgba(255,255,255,.72)" }}>
+            {tool.run_count > 0 ? `${tool.run_count} esecuzioni` : tool.slug}
+          </span>
+        </>
+      }
+    />
   );
 }
 
 /** Gli strumenti di sistema: si vedono, non si lanciano. Dicono cosa fanno da soli. */
-function AutomaticToolCard({ tool }: { tool: Tool }) {
+function AutomaticToolCard({ tool, index }: { tool: Tool; index: number }) {
   const Icon = toolIcon(tool.slug);
   return (
-    <div
-      className="flex items-start gap-3.5 rounded-card p-4 text-left"
-      style={{ border: "1.5px dashed var(--color-line)", background: "var(--color-line-soft)" }}
-      aria-label={`${tool.title}: ${tool.note ?? "automatico"}`}
-    >
-      <span className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px]" style={{ background: "var(--color-paper)", color: "var(--color-ink-faint)" }}>
-        <Icon size={19} strokeWidth={1.9} />
-      </span>
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="flex items-center gap-2 text-[15px] font-semibold" style={{ color: "var(--color-ink-soft)" }}>
-          {tool.title}
-          <span className="tv-pill h-[18px] px-2 text-[10px]" style={{ background: "var(--color-paper)", color: "var(--color-ink-faint)" }}>
-            automatico
-          </span>
-        </span>
-        <span className="text-[12.5px] leading-[1.45]" style={{ color: "var(--color-ink-faint)" }}>
-          {tool.description}
-        </span>
-      </span>
-    </div>
+    <ShaderCard
+      title={tool.title}
+      description={tool.description}
+      icon={<Icon size={19} strokeWidth={1.9} />}
+      config={shaderConfigFor(index)}
+      badge="automatico"
+      muted
+      className="h-[196px]"
+      footer={<span className="text-[11.5px] font-normal" style={{ color: "rgba(255,255,255,.72)" }}>{tool.note}</span>}
+    />
   );
 }
 

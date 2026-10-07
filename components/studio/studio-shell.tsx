@@ -287,6 +287,7 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
           formats={formats}
           variantCount={variantCount}
           photoUrl={image?.url ?? null}
+          photoLabel={image?.label ?? null}
           run={run}
           selected={selected}
           user={user}
