@@ -73,6 +73,30 @@ create table if not exists tools (
 comment on table tools is
   'Il marketing aggiunge o modifica strumenti qui, senza un deploy.';
 
+-- Il modulo guidato e le versioni (migrazione 012).
+alter table tools add column if not exists fields            jsonb not null default '[]';
+alter table tools add column if not exists cta_label         text;
+alter table tools add column if not exists cover_image       text;
+alter table tools add column if not exists category          text
+  check (category is null or category in ('social','stampa'));
+alter table tools add column if not exists estimated_minutes integer;
+alter table tools add column if not exists default_variants  integer not null default 3
+  check (default_variants between 1 and 4);
+alter table tools add column if not exists published_version integer not null default 1;
+
+create table if not exists tool_versions (
+  id            uuid primary key default gen_random_uuid(),
+  tool_id       uuid not null references tools(id) on delete cascade,
+  version       integer not null,
+  snapshot      jsonb not null,
+  created_by    text,
+  created_at    timestamptz not null default now(),
+  published_at  timestamptz,
+  unique (tool_id, version)
+);
+
+create index if not exists tool_versions_tool_idx on tool_versions (tool_id, version desc);
+
 -- ---------------------------------------------------------------
 -- Template base, cachati da Figma
 -- ---------------------------------------------------------------
@@ -89,6 +113,9 @@ create table if not exists templates (
 
 create unique index if not exists templates_figma_node_id_key
   on templates (figma_node_id) where figma_node_id is not null;
+
+-- Il template proposto da uno strumento (migrazione 012): dopo templates, che referenzia.
+alter table tools add column if not exists default_template uuid references templates(id) on delete set null;
 
 -- ---------------------------------------------------------------
 -- Esecuzioni — una riga per run, stato completo per il refresh
@@ -225,3 +252,4 @@ alter table assets          enable row level security;
 alter table approvals       enable row level security;
 alter table scheduled_posts enable row level security;
 alter table profile_events  enable row level security;
+alter table tool_versions   enable row level security;

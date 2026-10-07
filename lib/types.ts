@@ -65,6 +65,10 @@ export interface Tool {
   cover_image: string | null;
   category: ToolCategory | null;
   estimated_minutes: number | null;
+  /** Il template proposto all'apertura del modulo. Null: il primo in libreria. */
+  default_template: string | null;
+  /** Quante varianti propone il modulo, da 1 a 4. */
+  default_variants: number;
   /** La versione che il team usa. Le bozze stanno in tool_versions. */
   published_version: number;
   default_formats: FormatId[];
@@ -77,7 +81,10 @@ export interface Tool {
 }
 
 /** Quello che di uno strumento si versiona: cio' che il team vede e usa. */
-export type ToolSnapshot = Pick<Tool, "title" | "description" | "prompt_template" | "fields" | "cta_label" | "default_formats" | "category" | "estimated_minutes" | "cover_image">;
+export type ToolSnapshot = Pick<
+  Tool,
+  "title" | "description" | "prompt_template" | "fields" | "cta_label" | "default_formats" | "category" | "estimated_minutes" | "cover_image" | "default_template" | "default_variants"
+>;
 
 export interface ToolVersion {
   id: string;

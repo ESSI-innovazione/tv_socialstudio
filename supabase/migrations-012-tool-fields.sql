@@ -13,6 +13,12 @@ alter table tools add column if not exists cover_image       text;
 alter table tools add column if not exists category          text
   check (category is null or category in ('social','stampa'));
 alter table tools add column if not exists estimated_minutes integer;
+alter table tools add column if not exists default_template  uuid references templates(id) on delete set null;
+alter table tools add column if not exists default_variants  integer not null default 3
+  check (default_variants between 1 and 4);
+
+comment on column tools.default_template is
+  'Il template proposto all''apertura del modulo. Nullo: il primo in libreria.';
 alter table tools add column if not exists published_version integer not null default 1;
 
 comment on column tools.fields is

@@ -94,8 +94,10 @@ export function StudioShell({ user, tools, campaigns, campaignId, templates, rec
    */
   const [image, setImage] = useState<ImageChoice | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>(SAMPLE_ATTACHMENTS);
-  const [variantCount, setVariantCount] = useState(3);
-  const [templateId, setTemplateId] = useState<string | null>(templates[0]?.id ?? null);
+  const [variantCount, setVariantCount] = useState(tool?.default_variants ?? 3);
+  const [templateId, setTemplateId] = useState<string | null>(
+    (tool?.default_template && templates.some((t) => t.id === tool.default_template) ? tool.default_template : null) ?? templates[0]?.id ?? null,
+  );
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const clearTimers = useCallback(() => {

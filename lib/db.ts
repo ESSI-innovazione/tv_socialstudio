@@ -13,6 +13,8 @@ import type {
   ScheduledPost,
   Template,
   Tool,
+  ToolSnapshot,
+  ToolVersion,
 } from "./types";
 import { MEMORY_SEED } from "./seed-data";
 
@@ -48,6 +50,7 @@ interface MemoryStore {
   profileEvents: ProfileEvent[];
   campaigns: Campaign[];
   tools: Tool[];
+  toolVersions: ToolVersion[];
   templates: Template[];
   runs: Run[];
   approvals: Approval[];
@@ -63,7 +66,7 @@ const globalStore = globalThis as unknown as { __tvStore?: MemoryStore; __tvStor
  * righe vecchie a codice nuovo: in sviluppo il processo sopravvive ai
  * salvataggi, e uno store stantio e' un errore difficile da riconoscere.
  */
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 
 function memory(): MemoryStore {
   if (!globalStore.__tvStore || globalStore.__tvStoreVersion !== SEED_VERSION) {
@@ -252,6 +255,8 @@ function normalizeTool(row: Partial<Tool> & Pick<Tool, "id" | "slug" | "title" |
     cover_image: row.cover_image ?? null,
     category: row.category ?? null,
     estimated_minutes: row.estimated_minutes ?? null,
+    default_template: row.default_template ?? null,
+    default_variants: row.default_variants ?? 3,
     published_version: row.published_version ?? 1,
     default_formats: row.default_formats ?? [],
     run_count: row.run_count ?? 0,
@@ -276,6 +281,137 @@ export async function getTools(): Promise<Tool[]> {
 export async function getToolBySlug(slug: string): Promise<Tool | null> {
   const tools = await getTools();
   return tools.find((t) => t.slug === slug) ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Versioni degli strumenti                                             */
+/* ------------------------------------------------------------------ */
+
+/** Cio' che di uno strumento si versiona: quello che il team vede e usa. */
+export function snapshotOf(tool: Tool | ToolSnapshot): ToolSnapshot {
+  return {
+    title: tool.title,
+    description: tool.description,
+    prompt_template: tool.prompt_template,
+    fields: tool.fields,
+    cta_label: tool.cta_label,
+    default_formats: tool.default_formats,
+    category: tool.category,
+    estimated_minutes: tool.estimated_minutes,
+    cover_image: tool.cover_image,
+    default_template: tool.default_template,
+    default_variants: tool.default_variants,
+  };
+}
+
+/** Le versioni di uno strumento, dalla piu' recente. La bozza, se c'e', e' la prima. */
+export async function listToolVersions(toolId: string): Promise<ToolVersion[]> {
+  const supabase = db();
+  if (!supabase) return memory().toolVersions.filter((v) => v.tool_id === toolId).sort((a, b) => b.version - a.version);
+
+  const { data, error } = await supabase.from("tool_versions").select("*").eq("tool_id", toolId).order("version", { ascending: false });
+  if (error) {
+    console.error("[db] listToolVersions", error.message);
+    return [];
+  }
+  return data as ToolVersion[];
+}
+
+export async function getToolVersion(id: string): Promise<ToolVersion | null> {
+  const supabase = db();
+  if (!supabase) return memory().toolVersions.find((v) => v.id === id) ?? null;
+
+  const { data, error } = await supabase.from("tool_versions").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[db] getToolVersion", error.message);
+    return null;
+  }
+  return (data as ToolVersion) ?? null;
+}
+
+/**
+ * Salva la bozza di uno strumento. Ce n'e' una sola per strumento: se
+ * esiste si aggiorna, se no nasce col numero successivo all'ultima
+ * versione. Il team continua a vedere la versione pubblicata.
+ */
+export async function saveToolDraft(toolId: string, snapshot: ToolSnapshot, by: string): Promise<ToolVersion> {
+  const [versions, tools] = await Promise.all([listToolVersions(toolId), getTools()]);
+  const draft = versions.find((v) => v.published_at === null);
+  // Il seme nasce come v1 senza una riga in tool_versions: la prima bozza e' la v2.
+  const current = tools.find((t) => t.id === toolId)?.published_version ?? 0;
+  const next = Math.max(versions[0]?.version ?? 0, current) + 1;
+
+  const supabase = db();
+  if (!supabase) {
+    if (draft) {
+      draft.snapshot = snapshot;
+      draft.created_by = by;
+      return draft;
+    }
+    const row: ToolVersion = { id: crypto.randomUUID(), tool_id: toolId, version: next, snapshot, created_by: by, created_at: new Date().toISOString(), published_at: null };
+    memory().toolVersions.push(row);
+    return row;
+  }
+
+  if (draft) {
+    const { data, error } = await supabase.from("tool_versions").update({ snapshot, created_by: by }).eq("id", draft.id).select().single();
+    if (error) throw new Error(`Non riesco a salvare la bozza: ${error.message}`);
+    return data as ToolVersion;
+  }
+  const { data, error } = await supabase.from("tool_versions").insert({ tool_id: toolId, version: next, snapshot, created_by: by }).select().single();
+  if (error) throw new Error(`Non riesco a salvare la bozza: ${error.message}`);
+  return data as ToolVersion;
+}
+
+/**
+ * Pubblica una versione: la bozza diventa quello che il team usa. Una
+ * versione vecchia si ripristina prima come bozza e poi si pubblica, cosi'
+ * ogni pubblicazione e' una riga nuova e la storia resta lineare.
+ */
+export async function publishToolVersion(toolId: string, versionId: string): Promise<Tool | null> {
+  const version = await getToolVersion(versionId);
+  if (!version || version.tool_id !== toolId) return null;
+  const now = new Date().toISOString();
+
+  const supabase = db();
+  if (!supabase) {
+    version.published_at = now;
+    const tool = memory().tools.find((t) => t.id === toolId);
+    if (!tool) return null;
+    Object.assign(tool, version.snapshot, { published_version: version.version });
+    return normalizeTool(tool);
+  }
+
+  const { error: mark } = await supabase.from("tool_versions").update({ published_at: now }).eq("id", versionId);
+  if (mark) throw new Error(`Non riesco a pubblicare: ${mark.message}`);
+  return updateTool(toolId, { ...version.snapshot, published_version: version.version });
+}
+
+/** Uno strumento nuovo, vuoto: parte come bozza da scrivere. */
+export async function createTool(input: { slug: string; title: string; category: Tool["category"] }): Promise<Tool> {
+  const tools = await getTools();
+  const row: Tool = normalizeTool({
+    id: crypto.randomUUID(),
+    slug: input.slug,
+    title: input.title,
+    description: "Descrivi in una riga cosa produce questo strumento.",
+    prompt_template: "Scrivi qui l'istruzione, con i segnaposto fra doppie graffe come {{argomento}}.",
+    fields: [{ key: "argomento", label: "L'argomento", type: "text", required: true, example: "" }],
+    cta_label: "Crea",
+    category: input.category,
+    default_formats: ["linkedin"],
+    position: (tools.at(-1)?.position ?? 0) + 1,
+    published_version: 0,
+  });
+
+  const supabase = db();
+  if (!supabase) {
+    memory().tools.push(row);
+    return row;
+  }
+  const { data, error } = await supabase.from("tools").insert(row).select().single();
+  if (error) throw new Error(`Non riesco a creare lo strumento: ${error.message}`);
+  return normalizeTool(data as Tool);
 }
 
 export async function getCampaigns(): Promise<Campaign[]> {

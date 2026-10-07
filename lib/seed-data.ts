@@ -16,13 +16,15 @@ const CAMPAIGNS: Campaign[] = [
 const CTA_OPTIONS = ["Scopri il voucher", "Prenota una consulenza gratuita", "Iscriviti al corso", "Scarica la scheda", "Contattaci"];
 
 /** Gli strumenti di sistema non hanno un modulo: niente campi, niente pulsante. */
-const AUTOMATIC: Pick<Tool, "fields" | "cta_label" | "cover_image" | "category" | "estimated_minutes" | "published_version"> = {
+const AUTOMATIC: Pick<Tool, "fields" | "cta_label" | "cover_image" | "category" | "estimated_minutes" | "default_template" | "default_variants" | "published_version"> = {
   fields: [],
   cta_label: null,
   cover_image: null,
   category: null,
   estimated_minutes: null,
-  published_version: 1,
+  default_template: null,
+    default_variants: 3,
+    published_version: 1,
 };
 
 const TOOLS: Tool[] = [
@@ -43,6 +45,8 @@ const TOOLS: Tool[] = [
     cover_image: "tv-fondi.jpg",
     category: "stampa",
     estimated_minutes: 3,
+    default_template: null,
+    default_variants: 3,
     published_version: 1,
     default_formats: ["poster-a4"],
     run_count: 34,
@@ -66,6 +70,8 @@ const TOOLS: Tool[] = [
     cover_image: "tv-consulenza.jpg",
     category: "stampa",
     estimated_minutes: 5,
+    default_template: null,
+    default_variants: 3,
     published_version: 1,
     default_formats: ["poster-a4"],
     run_count: 9,
@@ -85,6 +91,8 @@ const TOOLS: Tool[] = [
     cover_image: "tv-digitale.jpg",
     category: "social",
     estimated_minutes: 2,
+    default_template: null,
+    default_variants: 3,
     published_version: 1,
     default_formats: ["linkedin", "ig-feed"],
     run_count: 6,
@@ -107,6 +115,8 @@ const TOOLS: Tool[] = [
     cover_image: "tv-network.jpg",
     category: "social",
     estimated_minutes: 3,
+    default_template: null,
+    default_variants: 3,
     published_version: 1,
     default_formats: ["linkedin", "ig-feed", "ig-story"],
     run_count: 47,
@@ -243,6 +253,7 @@ export const MEMORY_SEED = {
   profileEvents: [],
   campaigns: CAMPAIGNS,
   tools: TOOLS,
+  toolVersions: [],
   templates: TEMPLATES,
   runs: RUNS,
   approvals: APPROVALS,
