@@ -248,7 +248,9 @@ export function StudioShell({ user, tools, campaigns, campaignId, templates, rec
   const composing = state === "composing";
   const showHome = composing && !tool && mode === "home" && home;
   const showForm = composing && Boolean(tool);
-  const showRail = !(showHome || showForm);
+  // La colonna di destra serve al brief libero e all'esecuzione: la home, il
+  // modulo e i risultati hanno le loro colonne.
+  const showRail = !(showHome || showForm) && state !== "results";
 
   /** Cambio di fotografia dall'editor: vale per tutte le varianti dell'esecuzione. */
   const setPhoto = (photo: string) =>
@@ -325,26 +327,16 @@ export function StudioShell({ user, tools, campaigns, campaignId, templates, rec
               user={user}
               channels={channels}
               onAssets={mergeAssets}
+              tools={tools}
+              campaigns={campaigns}
+              templates={templates}
               layouts={layouts}
               onLayouts={setLayouts}
             />
           ) : null}
         </main>
 
-        {showRail ? (
-          <RightRail
-            state={state}
-            formats={formats}
-            variantCount={variantCount}
-            photoUrl={image?.url ?? null}
-            run={run}
-            selected={selected}
-            user={user}
-            channels={channels}
-            layouts={layouts}
-            onAssets={mergeAssets}
-          />
-        ) : null}
+        {showRail ? <RightRail state={state} formats={formats} variantCount={variantCount} photoUrl={image?.url ?? null} run={run} /> : null}
     </div>
   );
 }

@@ -847,6 +847,23 @@ export async function decideApproval(
   return (data as Approval) ?? null;
 }
 
+/** Riapre una richiesta decisa: torna in attesa, come se la decisione non ci fosse stata. */
+export async function reopenApproval(id: string): Promise<Approval | null> {
+  const patch = { status: "pending" as const, decided_at: null, comment: null, approver_email: null, approver_name: "Approvatori" };
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().approvals.find((a) => a.id === id);
+    if (row) Object.assign(row, patch);
+    return row ?? null;
+  }
+  const { data, error } = await supabase.from("approvals").update(patch).eq("id", id).select().maybeSingle();
+  if (error) {
+    console.error("[db] reopenApproval", error.message);
+    return null;
+  }
+  return (data as Approval) ?? null;
+}
+
 /**
  * Segna approvati gli asset di una variante. E' la denormalizzazione che
  * permette all'archivio di chiedere «gli asset approvati» con una query

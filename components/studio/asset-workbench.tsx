@@ -40,6 +40,7 @@ import type { ChannelStatus } from "@/lib/publish";
 import type { StudioUser } from "@/auth";
 import { AssetEditor } from "./asset-editor";
 import { ImagePicker } from "./image-picker";
+import { PdfDownload } from "./pdf-download";
 import { VideoExport } from "./video-export";
 import { PublishFlow } from "./publish-flow";
 
@@ -654,14 +655,11 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
 
       {chosen.id === "mp4" ? (
         <VideoExport run={run} variants={variants} formats={picked} layouts={layouts} />
+      ) : chosen.id === "pdf" ? (
+        <PdfDownload runId={run.id} variantIndex={variant.index} variantCount={run.variants.length} layout={layouts[`${variant.index}:poster-a4`] ?? null} compact />
       ) : (
         <div className="flex flex-col gap-1.5">
           <p className="tv-label">SCARICA</p>
-          {chosen.id === "pdf" ? (
-            <p className="text-[12px] leading-[1.45]" style={{ color: "var(--color-ink-faint)" }}>
-              Il PDF lo stampa Chromium: qualche secondo di attesa. Testo e marchio restano vettoriali.
-            </p>
-          ) : null}
           {variants.flatMap((v) =>
             picked.map((f) => {
               // L'impaginazione modificata non ha un posto nel database:

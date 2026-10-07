@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Check, ChevronDown, CircleAlert, LoaderCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { FORMATS } from "@/lib/brand";
 import { overallStatus } from "@/lib/brand-guard";
 import type { AssetLayout } from "@/lib/layout-model";
 import type { ChannelStatus } from "@/lib/publish";
-import type { Approval, Asset, GuardCheck, GuardStatus, Run } from "@/lib/types";
+import type { Asset, GuardCheck, GuardStatus, Run, ScheduledPost } from "@/lib/types";
 import type { StudioUser } from "@/auth";
-import { ApprovalStep } from "./approval-step";
-import { PublishStep } from "./publish-step";
+import { ApprovalStep, latestFor, useApprovals } from "./approval-step";
+import { ScheduleCard } from "./schedule-card";
 
 interface Props {
   run: Run;
@@ -23,8 +23,10 @@ interface Props {
 
 /**
  * Dalla variante scelta alla pubblicazione, in ordine: il controllo del
- * brand, l'approvazione, il canale. Ogni passo si sblocca col precedente,
- * e ogni verdetto arriva dal server: il client qui chiede, non decide.
+ * brand, l'approvazione, il calendario. Ogni passo si sblocca col
+ * precedente, e ogni verdetto arriva dal server: il client qui chiede, non
+ * decide. E' il pannello «Pubblica» dell'editor; la pagina dei risultati
+ * dispone gli stessi pezzi nelle sue colonne.
  */
 export function PublishFlow({ run, selected, layouts, user, channels, onAssets }: Props) {
   const assets = run.assets.filter((a) => a.variant_index === selected);
@@ -32,15 +34,16 @@ export function PublishFlow({ run, selected, layouts, user, channels, onAssets }
   const guard = overallStatus(assets.map((a) => a.guard_status));
   const guardOk = guard === "pass" || guard === "warn";
 
-  const [approval, setApproval] = useState<Approval["status"] | null>(null);
-  const onStatus = useCallback((status: Approval["status"] | null) => setApproval(status), []);
-  const approved = approval === "approved" || (saved && assets.every((a) => a.approved_at));
+  const [approvals, setApprovals] = useApprovals(run.id);
+  const [posts, setPosts] = useState<ScheduledPost[]>([]);
+  const latest = latestFor(approvals, selected);
+  const approved = latest?.status === "approved" || (saved && assets.every((a) => a.approved_at));
 
   return (
     <div className="mt-auto flex flex-col gap-3 pt-2">
       <GuardStep run={run} selected={selected} assets={assets} layouts={layouts} status={guard} saved={saved} onAssets={onAssets} />
-      <ApprovalStep run={run} selected={selected} guardOk={guardOk} user={user} onAssets={onAssets} onStatus={onStatus} />
-      {approved && guardOk ? <PublishStep run={run} assets={assets} channels={channels} /> : null}
+      <ApprovalStep run={run} selected={selected} guardOk={guardOk} user={user} approvals={approvals} onApprovals={setApprovals} onAssets={onAssets} />
+      <ScheduleCard run={run} assets={assets} approved={approved && guardOk} user={user} channels={channels} posts={posts} onPosts={setPosts} />
     </div>
   );
 }
@@ -52,7 +55,7 @@ export function PublishFlow({ run, selected, layouts, user, channels, onAssets }
 const TONE: Record<GuardStatus, { bg: string; fg: string; Icon: typeof Check; label: string }> = {
   pass: { bg: "var(--color-success-bg)", fg: "var(--color-success)", Icon: Check, label: "Brand ok" },
   warn: { bg: "var(--color-warm-tint)", fg: "var(--color-warning)", Icon: TriangleAlert, label: "Brand ok, con avvisi" },
-  fail: { bg: "#fdecea", fg: "#8c1d18", Icon: CircleAlert, label: "Bloccato dal brand guard" },
+  fail: { bg: "var(--color-danger-bg)", fg: "var(--color-danger)", Icon: CircleAlert, label: "Bloccato dal brand guard" },
 };
 
 /** Le verifiche di tutti i formati in un elenco solo: per chiave, il peggiore vince. */
@@ -90,6 +93,7 @@ export function GuardStep({
   status,
   saved,
   onAssets,
+  expanded = false,
 }: {
   run: Run;
   selected: number;
@@ -98,10 +102,12 @@ export function GuardStep({
   status: GuardStatus | null;
   saved: boolean;
   onAssets: (assets: Asset[]) => void;
+  /** Con l'elenco delle verifiche gia' aperto: nei risultati e' la lista, non un riassunto. */
+  expanded?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(expanded);
 
   // L'impaginazione nell'editor e' cambiata dopo l'ultimo controllo?
   const stale = assets.some((a) => {
@@ -126,7 +132,7 @@ export function GuardStep({
       const data = (await res.json().catch(() => ({}))) as { assets?: Asset[]; error?: string };
       if (!res.ok || !data.assets) throw new Error(data.error ?? "Il controllo non e' riuscito.");
       onAssets(data.assets);
-      setOpen(data.assets.some((a) => a.guard_status !== "pass"));
+      setOpen(expanded || data.assets.some((a) => a.guard_status !== "pass"));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -149,7 +155,7 @@ export function GuardStep({
           type="button"
           onClick={verify}
           disabled={busy || !saved}
-          className="tv-pill h-[30px] shrink-0 gap-1.5 px-3 text-[12px] transition-colors"
+          className="tv-pill h-[36px] shrink-0 gap-1.5 px-3 text-[12px] transition-colors"
           style={{
             background: "var(--color-paper)",
             border: "1px solid var(--color-line)",
@@ -163,7 +169,7 @@ export function GuardStep({
       </div>
 
       {error ? (
-        <p className="px-3.5 pb-3 text-[12px]" style={{ color: "var(--color-warning)" }}>
+        <p className="px-3.5 pb-3 text-[12px]" style={{ color: "var(--color-danger)" }}>
           {error}
         </p>
       ) : null}

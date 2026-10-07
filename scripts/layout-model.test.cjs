@@ -146,5 +146,49 @@ check("la foto a pieno formato resta a pieno formato dopo un ritocco", touched.x
 const pushed = clampBlock("ig-story", { ...touched, x: 0.4, y: -0.3, w: 1.5, h: 2 });
 check("ma non esce dall'artboard", pushed.x === 0 && pushed.y === 0 && pushed.w === 1 && pushed.h === 1, JSON.stringify(pushed));
 
+/* ---------------- geometria di stampa ---------------- */
+
+const { printGeometry, cropMarks, mmToPx, pdfFileName, MM_TO_PX } = require("../.tmp-test/render/print-geometry.js");
+const A4 = { w: 794, h: 1123 };
+
+check("794 px sono 210 mm", Math.abs(A4.w / MM_TO_PX - 210) < 0.2, String(A4.w / MM_TO_PX));
+
+const plainPage = printGeometry(A4, { bleedMm: 0, marks: false });
+check("senza abbondanza la pagina e' il rifilo", plainPage.page.w === A4.w && plainPage.page.h === A4.h && plainPage.offset.x === 0);
+check("senza abbondanza niente copia sotto", plainPage.underScale === 1);
+check("senza fascia niente segni", cropMarks(plainPage).length === 0);
+
+const bled = printGeometry(A4, { bleedMm: 3, marks: false });
+check("3 mm di abbondanza per lato", Math.abs(bled.bleed - mmToPx(3)) < 1e-9 && Math.abs(bled.page.w - (A4.w + 2 * mmToPx(3))) < 1e-9, JSON.stringify(bled.page));
+check("il rifilo si sposta di quanto l'abbondanza", bled.offset.x === bled.bleed && bled.offset.y === bled.bleed);
+check("la copia sotto copre l'abbondanza su ogni lato",
+  bled.underScale * A4.w >= A4.w + 2 * bled.bleed - 1e-9 && bled.underScale * A4.h >= A4.h + 2 * bled.bleed - 1e-9,
+  String(bled.underScale));
+// L'area di sicurezza non si muove: un blocco a 64 px dal rifilo sta ancora a 64 px dal rifilo,
+// perche' il foglio al rifilo e' disegnato 1:1 all'offset.
+check("il foglio al rifilo resta 1:1", bled.trim.w === A4.w && bled.trim.h === A4.h);
+
+const marked = printGeometry(A4, { bleedMm: 3, marks: true });
+check("con i segni c'e' la fascia", marked.slug > 0 && marked.offset.x === marked.bleed + marked.slug);
+const segments = cropMarks(marked);
+check("otto segmenti, due per angolo", segments.length === 8);
+for (const s of segments) {
+  const horizontal = s.y1 === s.y2;
+  const vertical = s.x1 === s.x2;
+  check("ogni segno e' orizzontale o verticale", horizontal !== vertical, JSON.stringify(s));
+  // Nessun segno entra nell'abbondanza: resta fuori dal rettangolo rifilo + abbondanza.
+  const insideX = Math.min(s.x1, s.x2) > marked.offset.x - marked.bleed && Math.max(s.x1, s.x2) < marked.offset.x + A4.w + marked.bleed;
+  const insideY = Math.min(s.y1, s.y2) > marked.offset.y - marked.bleed && Math.max(s.y1, s.y2) < marked.offset.y + A4.h + marked.bleed;
+  check("un segno non entra nell'abbondanza", !(insideX && insideY), JSON.stringify(s));
+  // E sta dentro la pagina.
+  check("un segno sta nella pagina", Math.min(s.x1, s.x2) >= 0 && Math.min(s.y1, s.y2) >= 0 && Math.max(s.x1, s.x2) <= marked.page.w && Math.max(s.y1, s.y2) <= marked.page.h, JSON.stringify(s));
+}
+check("i segni orizzontali stanno sulla linea di rifilo", segments.filter((s) => s.y1 === s.y2).every((s) => s.y1 === marked.offset.y || s.y1 === marked.offset.y + A4.h));
+check("i segni verticali stanno sulla linea di rifilo", segments.filter((s) => s.x1 === s.x2).every((s) => s.x1 === marked.offset.x || s.x1 === marked.offset.x + A4.w));
+
+check("il nome del file e' parlante", pdfFileName("Voucher Cloud MIMIT", "Poster per un bando", 2) === "voucher-cloud-mimit-poster-per-un-bando-v2.pdf", pdfFileName("Voucher Cloud MIMIT", "Poster per un bando", 2));
+check("tutte le varianti in un file", pdfFileName("Fondi STEP 2026", "Kit social", "tutte").endsWith("-tutte-le-varianti.pdf"));
+check("gli accenti spariscono dal nome", pdfFileName("Attivita' è così", "Catalogo", 1) === "attivita-e-cosi-catalogo-v1.pdf", pdfFileName("Attivita' è così", "Catalogo", 1));
+
 console.log(`\n${pass} verifiche passate, ${fail} fallite`);
 process.exit(fail === 0 ? 0 : 1);

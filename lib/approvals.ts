@@ -9,6 +9,7 @@ import {
   getRun,
   listApprovers,
   markAssetsApproved,
+  reopenApproval,
 } from "./db";
 import { env } from "./env";
 import { sendMail } from "./mail";
@@ -79,6 +80,28 @@ export async function requestApproval(
   });
 
   return { approval, mailed: result.sent };
+}
+
+/** Entro quanto chi ha approvato puo' tornare indietro. */
+export const UNDO_WINDOW_MS = 30 * 60_000;
+
+/**
+ * Annulla un'approvazione appena data. Solo chi l'ha data, solo per poco:
+ * passata la mezz'ora, o passato il lavoro a qualcun altro, si rimanda
+ * indietro con un commento, non si cancella.
+ */
+export async function undoDecision(approvalId: string, approver: StudioUser): Promise<{ approval: Approval; assets: Asset[] }> {
+  const existing = await getApproval(approvalId);
+  if (!existing) throw new ApprovalError("Richiesta non trovata", 404);
+  if (existing.status !== "approved") throw new ApprovalError("Questa richiesta non e' approvata: niente da annullare.");
+  if (existing.approver_email !== approver.email) throw new ApprovalError("Puo' annullare solo chi ha approvato.", 403);
+  if (!existing.decided_at || Date.now() - new Date(existing.decided_at).getTime() > UNDO_WINDOW_MS) {
+    throw new ApprovalError("E' passata piu' di mezz'ora: rimanda indietro con un commento, invece di annullare.");
+  }
+
+  const approval = (await reopenApproval(approvalId)) ?? { ...existing, status: "pending" as const, decided_at: null, comment: null, approver_email: null, approver_name: "Approvatori" };
+  const assets = await markAssetsApproved(existing.run_id, existing.variant_index, null);
+  return { approval, assets };
 }
 
 export async function decide(

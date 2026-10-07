@@ -1,47 +1,35 @@
 "use client";
 
-import { Building2, Camera, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { FORMATS, type FormatId } from "@/lib/brand";
-import { deadlineLabel, daysUntil } from "@/lib/format";
-import type { AssetLayout } from "@/lib/layout-model";
-import type { ChannelStatus } from "@/lib/publish";
-import type { Asset, Run, RunState } from "@/lib/types";
-import type { StudioUser } from "@/auth";
+import { deadlineLabel } from "@/lib/format";
+import type { Run, RunState } from "@/lib/types";
 import { AssetPreview } from "./asset-preview";
 import { LogoMark } from "./logo";
-import { PublishFlow } from "./publish-flow";
 
 interface Props {
   state: RunState;
   formats: FormatId[];
   variantCount: number;
-  /** Il visual scelto al passo 3, se c'e': riempie i fogli dell'anteprima. */
+  /** Il visual scelto, se c'e': riempie i fogli dell'anteprima. */
   photoUrl: string | null;
   run: Run | null;
-  selected: number;
-  user: StudioUser;
-  channels: ChannelStatus;
-  /** Le impaginazioni ritoccate: il brand-guard controlla quelle. */
-  layouts: Record<string, AssetLayout>;
-  onAssets: (assets: Asset[]) => void;
 }
 
 /**
- * La colonna di destra fa una cosa sola: mostra cosa si sta per ottenere,
- * o cosa si e' ottenuto. Niente regole, niente stato dei canali.
+ * La colonna di destra del brief libero e dell'esecuzione: cosa si sta per
+ * ottenere, o cosa sta arrivando. I risultati hanno la loro colonna, dentro
+ * alla pagina dei risultati.
  */
-export function RightRail({ state, formats, variantCount, photoUrl, run, selected, user, channels, layouts, onAssets }: Props) {
+export function RightRail({ state, formats, variantCount, photoUrl, run }: Props) {
   return (
     <aside
-      className="tv-scroll flex w-[372px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5"
+      className="tv-scroll hidden w-[372px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5 lg:flex"
       style={{ borderLeft: "1px solid var(--color-line)" }}
       aria-label="Anteprima"
     >
       {state === "composing" ? <Sheets formats={formats} variantCount={variantCount} photoUrl={photoUrl} /> : null}
       {state === "running" ? <RunningRail run={run} /> : null}
-      {state === "results" && run ? (
-        <PublishRail run={run} selected={selected} user={user} channels={channels} layouts={layouts} onAssets={onAssets} />
-      ) : null}
     </aside>
   );
 }
@@ -77,7 +65,7 @@ function Sheets({ formats, variantCount, photoUrl }: { formats: FormatId[]; vari
                   <span className="block text-[12px]" style={{ color: "var(--color-ink-faint)" }}>
                     {spec.exportNote}
                   </span>
-                  <span className="block text-[12px]" style={{ color: "var(--color-rose)" }}>
+                  <span className="block text-[12px]" style={{ color: "var(--color-rose-ink)" }}>
                     {variantCount} {variantCount === 1 ? "variante" : "varianti"}
                   </span>
                 </span>
@@ -169,65 +157,5 @@ function Row({ label, value }: { label: string; value: string }) {
       </dt>
       <dd style={{ color: "var(--color-ink-soft)" }}>{value}</dd>
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* results — pubblicazione                                              */
-/* ------------------------------------------------------------------ */
-
-function PublishRail({
-  run,
-  selected,
-  user,
-  channels,
-  layouts,
-  onAssets,
-}: {
-  run: Run;
-  selected: number;
-  user: StudioUser;
-  channels: ChannelStatus;
-  layouts: Record<string, AssetLayout>;
-  onAssets: (assets: Asset[]) => void;
-}) {
-  const days = daysUntil(run.brief?.deadline ?? null);
-
-  return (
-    <>
-      <section>
-        <p className="tv-label pb-3">CAPTION · VARIANTE {selected + 1}</p>
-        <ul className="flex flex-col gap-2.5">
-          {run.captions.map((caption) => (
-            <li key={caption.channel} className="rounded-card p-3.5" style={{ border: "1px solid var(--color-line)" }}>
-              <div className="flex items-center gap-2 pb-2">
-                {caption.channel === "linkedin" ? (
-                  <Building2 size={16} strokeWidth={1.9} style={{ color: "var(--color-wine)" }} />
-                ) : (
-                  <Camera size={16} strokeWidth={1.9} style={{ color: "var(--color-wine)" }} />
-                )}
-                <span className="text-[13px] font-semibold" style={{ color: "var(--color-ink)" }}>
-                  {caption.channel === "linkedin" ? "LinkedIn" : "Instagram"}
-                </span>
-              </div>
-              <p className="tv-scroll max-h-[112px] overflow-y-auto text-[12.5px] leading-[1.55] whitespace-pre-line" style={{ color: "var(--color-ink-soft)" }}>
-                {caption.text}
-              </p>
-              <p className="pt-2 text-[11.5px]" style={{ color: "var(--color-rose)" }}>
-                {caption.hashtags.map((h) => `#${h}`).join(" ")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {days !== null && days >= 0 ? (
-        <p className="rounded-card px-3.5 py-3 text-[13px]" style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}>
-          <span className="font-semibold">{days} giorni alla scadenza</span> · {deadlineLabel(run.brief?.deadline ?? null)}
-        </p>
-      ) : null}
-
-      <PublishFlow run={run} selected={selected} layouts={layouts} user={user} channels={channels} onAssets={onAssets} />
-    </>
   );
 }
