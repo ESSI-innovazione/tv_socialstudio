@@ -1,4 +1,6 @@
-import { requireApprover } from "@/lib/admin";
+import { requireCan } from "@/lib/admin";
+
+const requireApprover = () => requireCan("syncTemplates");
 import { getTemplates } from "@/lib/db";
 import { figmaTemplates } from "@/lib/integrations/figma";
 import { FigmaError } from "@/lib/integrations/figma-errors";

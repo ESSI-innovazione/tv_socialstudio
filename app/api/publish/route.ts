@@ -1,4 +1,5 @@
 import { currentUser } from "@/auth";
+import { can } from "@/lib/permissions";
 import { getAsset, getRun, listPostsBetween } from "@/lib/db";
 import { PublishRefused, channelStatus, schedulePost } from "@/lib/publish";
 import type { Channel, Surface } from "@/lib/types";
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return Response.json({ error: "Non autorizzato" }, { status: 401 });
   // Pubblicare richiede un approvatore: l'approvazione da sola non basta.
-  if (user.role !== "approver") return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
+  if (!can(user, "publish")) return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
 
   let payload: Record<string, unknown>;
   try {

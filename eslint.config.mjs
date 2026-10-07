@@ -35,6 +35,8 @@ const eslintConfig = [
       // I test e gli script di servizio sono CommonJS per scelta: girano con
       // `node` sul JavaScript emesso da tsc, senza bundler.
       "scripts/**",
+      // Il JavaScript emesso da tsc per i test: non e' codice sorgente.
+      ".tmp-test/**",
     ],
   },
 ];

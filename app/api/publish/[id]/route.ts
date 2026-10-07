@@ -1,4 +1,5 @@
 import { currentUser } from "@/auth";
+import { can } from "@/lib/permissions";
 import { deletePost, getPost, markPost } from "@/lib/db";
 import { publishNow } from "@/lib/publish";
 
@@ -16,7 +17,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, context: Context) {
   const user = await currentUser();
   if (!user) return Response.json({ error: "Non autorizzato" }, { status: 401 });
-  if (user.role !== "approver") return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
+  if (!can(user, "publish")) return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
 
   const { id } = await context.params;
   const post = await getPost(id);
@@ -52,7 +53,7 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(_request: Request, context: Context) {
   const user = await currentUser();
   if (!user) return Response.json({ error: "Non autorizzato" }, { status: 401 });
-  if (user.role !== "approver") return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
+  if (!can(user, "publish")) return Response.json({ error: "Pubblicare e programmare e' riservato agli approvatori." }, { status: 403 });
 
   const { id } = await context.params;
   const post = await getPost(id);
