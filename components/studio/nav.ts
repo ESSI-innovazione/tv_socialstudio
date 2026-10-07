@@ -18,6 +18,7 @@ export function studioNav(role: Role): NavItem[] {
   ];
   if (role === "approver") {
     items.push({ href: "/studio/approvazioni", label: "Approvazioni" });
+    items.push({ href: "/studio/admin", label: "Admin" });
   }
   return items;
 }

@@ -6,6 +6,7 @@ import type {
   Asset,
   Campaign,
   Profile,
+  Role,
   Run,
   RunState,
   ScheduledPost,
@@ -84,9 +85,84 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
   return (data as Profile) ?? null;
 }
 
+/** Tutto il team, in ordine alfabetico di email. */
+export async function listProfiles(): Promise<Profile[]> {
+  const supabase = db();
+  if (!supabase) return [...memory().profiles].sort((a, b) => a.email.localeCompare(b.email));
+
+  const { data, error } = await supabase.from("profiles").select("*").order("email");
+  if (error) {
+    console.error("[db] listProfiles", error.message);
+    return [...memory().profiles];
+  }
+  return data as Profile[];
+}
+
+/** Un collega nuovo. Con un profilo puo' entrare con Google da subito. */
+export async function createProfile(input: { email: string; name: string | null; role: Role }): Promise<Profile> {
+  const row: Profile = {
+    id: crypto.randomUUID(),
+    email: input.email,
+    name: input.name,
+    role: input.role,
+    created_at: new Date().toISOString(),
+  };
+
+  const supabase = db();
+  if (!supabase) {
+    memory().profiles.push(row);
+    return row;
+  }
+
+  const { data, error } = await supabase.from("profiles").insert(row).select().single();
+  if (error) throw new Error(`Non riesco a creare il profilo: ${error.message}`);
+  return data as Profile;
+}
+
+export async function updateProfile(id: string, patch: Partial<Pick<Profile, "role" | "name">>): Promise<Profile | null> {
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().profiles.find((p) => p.id === id);
+    if (row) Object.assign(row, patch);
+    return row ?? null;
+  }
+
+  const { data, error } = await supabase.from("profiles").update(patch).eq("id", id).select().maybeSingle();
+  if (error) {
+    console.error("[db] updateProfile", error.message);
+    return null;
+  }
+  return (data as Profile) ?? null;
+}
+
 /* ------------------------------------------------------------------ */
 /* Strumenti, campagne, template                                        */
 /* ------------------------------------------------------------------ */
+
+/** Modifica uno strumento salvato: titolo, descrizione, istruzione, formati. */
+export async function updateTool(
+  id: string,
+  patch: Partial<Pick<Tool, "title" | "description" | "prompt_template" | "default_formats">>,
+): Promise<Tool | null> {
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().tools.find((t) => t.id === id);
+    if (row) Object.assign(row, patch);
+    return row ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("tools")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) {
+    console.error("[db] updateTool", error.message);
+    return null;
+  }
+  return (data as Tool) ?? null;
+}
 
 export async function getTools(): Promise<Tool[]> {
   const supabase = db();
