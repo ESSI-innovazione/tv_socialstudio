@@ -183,7 +183,7 @@ const PROFILES: Profile[] = [
   {
     id: "prof-demo",
     email: "demo@timevision.it",
-    name: "Giulia Rossi",
+    name: "Federica Rossi",
     role: "approver",
     // La persona di sviluppo amministra: cosi' il team si prova senza chiavi.
     is_admin: true,

@@ -111,7 +111,7 @@ export async function currentUser(): Promise<StudioUser | null> {
   if (!authConfigured) {
     const email = `demo@${ALLOWED_EMAIL_DOMAIN}`;
     const stored = await getProfileByEmail(email);
-    const name = stored?.name ?? "Giulia Rossi";
+    const name = stored?.name ?? "Federica Rossi";
     return {
       email,
       name,

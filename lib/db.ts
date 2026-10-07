@@ -599,7 +599,7 @@ export async function getRun(id: string): Promise<Run | null> {
 
 /**
  * L'esecuzione piu' recente di una persona, quella che la console le
- * ripristina al refresh. Il lavoro e' per utente: la console di Giulia non
+ * ripristina al refresh. Il lavoro e' per utente: la console di Federica non
  * riapre il poster di Marco.
  */
 export async function getLatestRun(email: string): Promise<Run | null> {
