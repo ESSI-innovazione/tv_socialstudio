@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, CircleAlert, LoaderCircle, Lock, Send, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, LoaderCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { FORMATS } from "@/lib/brand";
 import { overallStatus } from "@/lib/brand-guard";
 import type { AssetLayout } from "@/lib/layout-model";
 import type { Asset, GuardCheck, GuardStatus, Run } from "@/lib/types";
 import type { StudioUser } from "@/auth";
+import { ApprovalStep } from "./approval-step";
 
 interface Props {
   run: Run;
@@ -32,25 +33,7 @@ export function PublishFlow({ run, selected, layouts, user, onAssets }: Props) {
   return (
     <div className="mt-auto flex flex-col gap-3 pt-2">
       <GuardStep run={run} selected={selected} assets={assets} layouts={layouts} status={guard} saved={saved} onAssets={onAssets} />
-
-      <button
-        type="button"
-        disabled={!guardOk}
-        className="tv-pill h-[46px] w-full justify-center gap-2 text-[14.5px] transition-all"
-        style={{
-          background: guardOk ? "var(--color-coral)" : "var(--color-mute)",
-          color: "#ffffff",
-          boxShadow: guardOk ? "var(--shadow-coral)" : "none",
-          cursor: guardOk ? "pointer" : "not-allowed",
-        }}
-        title={guardOk ? undefined : "Prima il controllo del brand deve passare"}
-      >
-        {guardOk ? <Send size={16} strokeWidth={2.2} /> : <Lock size={16} strokeWidth={2} />}
-        Richiedi approvazione
-      </button>
-      <p className="text-center text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-        {user.role === "approver" ? "Sei approvatore: potrai approvare dalla coda." : "Un approvatore ricevera' la richiesta."}
-      </p>
+      <ApprovalStep run={run} selected={selected} guardOk={guardOk} user={user} onAssets={onAssets} />
     </div>
   );
 }

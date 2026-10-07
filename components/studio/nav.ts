@@ -16,7 +16,7 @@ export function studioNav(role: Role): NavItem[] {
     { href: "/studio/storico", label: "I miei lavori" },
   ];
   if (role === "approver") {
-    // Le pagine riservate arrivano con i blocchi successivi.
+    items.push({ href: "/studio/approvazioni", label: "Approvazioni" });
   }
   return items;
 }

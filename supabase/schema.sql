@@ -146,6 +146,20 @@ create table if not exists approvals (
 
 create index if not exists approvals_run_id_idx on approvals (run_id);
 
+-- Flusso di approvazione: chi chiede, quale variante, il commento (migrazione 009).
+alter table approvals add column if not exists requested_by  text;
+alter table approvals add column if not exists variant_index integer not null default 0;
+alter table approvals add column if not exists note          text;
+alter table approvals add column if not exists comment       text;
+
+create index if not exists approvals_status_idx on approvals (status, created_at);
+
+alter table assets add column if not exists approval_id uuid references approvals(id) on delete set null;
+alter table assets add column if not exists approved_by text;
+alter table assets add column if not exists approved_at timestamptz;
+
+create index if not exists assets_approved_idx on assets (approved_at desc) where approved_at is not null;
+
 -- ---------------------------------------------------------------
 -- Coda di pubblicazione, drenata dal cron
 -- ---------------------------------------------------------------

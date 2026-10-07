@@ -81,6 +81,13 @@ export const env = {
   get cronSecret() {
     return read("CRON_SECRET");
   },
+  /** Resend, per le email di approvazione. Senza, si logga e basta. */
+  get resendApiKey() {
+    return read("RESEND_API_KEY");
+  },
+  get mailFrom() {
+    return read("MAIL_FROM") ?? "TV Social Studio <studio@timevision.it>";
+  },
   get googleClientId() {
     return read("GOOGLE_CLIENT_ID");
   },

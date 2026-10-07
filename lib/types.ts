@@ -164,6 +164,10 @@ export interface Asset {
   guard?: GuardCheck[] | null;
   guard_status?: GuardStatus | null;
   guard_checked_at?: string | null;
+  /** Approvato: da quale richiesta, da chi, quando. Null finche' non lo e'. */
+  approval_id?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
 }
 
 export interface Run {
@@ -225,10 +229,19 @@ export interface ScheduledPost {
 export interface Approval {
   id: string;
   run_id: string;
+  /** La variante dell'esecuzione per cui si chiede. */
+  variant_index: number;
+  /** Chi ha chiesto. */
+  requested_by: string | null;
+  /** Il messaggio di chi chiede. */
+  note: string | null;
   approver_name: string;
   approver_email: string | null;
   status: "pending" | "approved" | "rejected";
+  /** Il commento di chi decide: obbligatorio quando rimanda indietro. */
+  comment: string | null;
   decided_at: string | null;
+  created_at: string;
 }
 
 /* ------------------------------------------------------------------ */

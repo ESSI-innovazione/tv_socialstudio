@@ -408,56 +408,155 @@ export async function getApprovals(runId: string): Promise<Approval[]> {
   return data as Approval[];
 }
 
-export async function seedApprovals(runId: string): Promise<Approval[]> {
-  const rows: Approval[] = [
-    {
-      id: crypto.randomUUID(),
-      run_id: runId,
-      approver_name: "Ufficio legale",
-      approver_email: null,
-      status: "pending",
-      decided_at: null,
-    },
-    {
-      id: crypto.randomUUID(),
-      run_id: runId,
-      approver_name: "Direzione Marketing",
-      approver_email: null,
-      status: "pending",
-      decided_at: null,
-    },
-  ];
+export async function getApproval(id: string): Promise<Approval | null> {
+  const supabase = db();
+  if (!supabase) return memory().approvals.find((a) => a.id === id) ?? null;
+
+  const { data, error } = await supabase.from("approvals").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[db] getApproval", error.message);
+    return null;
+  }
+  return (data as Approval) ?? null;
+}
+
+/** Le richieste in un certo stato. Le pendenti dalla piu' vecchia: e' la coda degli approvatori. */
+export async function listApprovals(status: Approval["status"], limit = 100): Promise<Approval[]> {
+  const supabase = db();
+  if (!supabase) {
+    const rows = memory().approvals.filter((a) => a.status === status);
+    rows.sort((a, b) => (status === "pending" ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)));
+    return rows.slice(0, limit);
+  }
+
+  const { data, error } = await supabase
+    .from("approvals")
+    .select("*")
+    .eq("status", status)
+    .order("created_at", { ascending: status === "pending" })
+    .limit(limit);
+
+  if (error) {
+    console.error("[db] listApprovals", error.message);
+    return memory().approvals.filter((a) => a.status === status).slice(0, limit);
+  }
+  return data as Approval[];
+}
+
+export interface NewApproval {
+  run_id: string;
+  variant_index: number;
+  requested_by: string;
+  note: string | null;
+}
+
+/** Una richiesta di approvazione. Il nome dell'approvatore si riempie alla decisione. */
+export async function createApproval(input: NewApproval): Promise<Approval> {
+  const row: Approval = {
+    id: crypto.randomUUID(),
+    run_id: input.run_id,
+    variant_index: input.variant_index,
+    requested_by: input.requested_by,
+    note: input.note,
+    approver_name: "Approvatori",
+    approver_email: null,
+    status: "pending",
+    comment: null,
+    decided_at: null,
+    created_at: new Date().toISOString(),
+  };
 
   const supabase = db();
   if (!supabase) {
-    memory().approvals.push(...rows);
-    return rows;
+    memory().approvals.push(row);
+    return row;
   }
 
-  const { data, error } = await supabase.from("approvals").insert(rows).select();
+  const { data, error } = await supabase.from("approvals").insert(row).select().single();
   if (error) {
-    console.error("[db] seedApprovals", error.message);
-    return rows;
+    console.error("[db] createApproval", error.message);
+    memory().approvals.push(row);
+    return row;
   }
-  return data as Approval[];
+  return data as Approval;
 }
 
 export async function decideApproval(
   id: string,
   status: "approved" | "rejected",
-  email: string,
-): Promise<void> {
-  const patch = { status, decided_at: new Date().toISOString(), approver_email: email };
+  approver: { email: string; name: string },
+  comment: string | null = null,
+): Promise<Approval | null> {
+  const patch = {
+    status,
+    decided_at: new Date().toISOString(),
+    approver_email: approver.email,
+    approver_name: approver.name,
+    comment,
+  };
 
   const supabase = db();
   if (!supabase) {
     const row = memory().approvals.find((a) => a.id === id);
     if (row) Object.assign(row, patch);
-    return;
+    return row ?? null;
   }
 
-  const { error } = await supabase.from("approvals").update(patch).eq("id", id);
-  if (error) console.error("[db] decideApproval", error.message);
+  const { data, error } = await supabase.from("approvals").update(patch).eq("id", id).select().maybeSingle();
+  if (error) {
+    console.error("[db] decideApproval", error.message);
+    return null;
+  }
+  return (data as Approval) ?? null;
+}
+
+/**
+ * Segna approvati gli asset di una variante. E' la denormalizzazione che
+ * permette all'archivio di chiedere «gli asset approvati» con una query
+ * sola; con `null` li riporta a non approvati, se la decisione cambia.
+ */
+export async function markAssetsApproved(
+  runId: string,
+  variantIndex: number,
+  approval: { id: string; email: string } | null,
+): Promise<Asset[]> {
+  const patch = approval
+    ? { approval_id: approval.id, approved_by: approval.email, approved_at: new Date().toISOString() }
+    : { approval_id: null, approved_by: null, approved_at: null };
+
+  const supabase = db();
+  if (!supabase) {
+    const run = memory().runs.find((r) => r.id === runId);
+    if (!run) return [];
+    const hit = run.assets.filter((a) => a.variant_index === variantIndex);
+    for (const a of hit) Object.assign(a, patch);
+    return hit;
+  }
+
+  const { data, error } = await supabase
+    .from("assets")
+    .update(patch)
+    .eq("run_id", runId)
+    .eq("variant_index", variantIndex)
+    .select();
+  if (error) {
+    console.error("[db] markAssetsApproved", error.message);
+    return [];
+  }
+  return data as Asset[];
+}
+
+/** Chi puo' approvare: riceve le richieste via email. */
+export async function listApprovers(): Promise<Profile[]> {
+  const supabase = db();
+  if (!supabase) return memory().profiles.filter((p) => p.role === "approver");
+
+  const { data, error } = await supabase.from("profiles").select("*").eq("role", "approver");
+  if (error) {
+    console.error("[db] listApprovers", error.message);
+    return [];
+  }
+  return data as Profile[];
 }
 
 /* ------------------------------------------------------------------ */
