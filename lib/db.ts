@@ -560,6 +560,102 @@ export async function listApprovers(): Promise<Profile[]> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Archivio                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Un asset approvato con l'esecuzione da cui nasce, per l'archivio condiviso. */
+export interface ArchiveEntry {
+  asset: Asset;
+  run: Run;
+}
+
+/**
+ * Tutti gli asset approvati del team, dal piu' recente. I filtri si applicano
+ * dopo, in memoria: l'archivio di un team marketing si conta in centinaia di
+ * righe, non in milioni, e un filtro solo serve a tutti e due gli store.
+ */
+export async function listApprovedAssets(limit = 500): Promise<ArchiveEntry[]> {
+  const supabase = db();
+  if (!supabase) {
+    const out: ArchiveEntry[] = [];
+    for (const run of memory().runs) {
+      for (const asset of run.assets) if (asset.approved_at) out.push({ asset, run });
+    }
+    out.sort((a, b) => (b.asset.approved_at ?? "").localeCompare(a.asset.approved_at ?? ""));
+    return out.slice(0, limit);
+  }
+
+  const { data, error } = await supabase
+    .from("assets")
+    .select("*, runs(*)")
+    .not("approved_at", "is", null)
+    .order("approved_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[db] listApprovedAssets", error.message);
+    return [];
+  }
+
+  return (data as (Asset & { runs: Run | null })[]).flatMap(({ runs, ...asset }) =>
+    runs ? [{ asset, run: { ...runs, assets: [] } }] : [],
+  );
+}
+
+/**
+ * Copia un'esecuzione conclusa in una nuova, della persona che la duplica:
+ * stesso brief, stesso copy, stessi formati, asset nuovi, nessuna
+ * approvazione. E' il «parti da questo» dell'archivio.
+ */
+export async function duplicateRun(source: Run, createdBy: string): Promise<Run> {
+  const run = await createRun({
+    campaign_id: source.campaign_id,
+    tool_slug: source.tool_slug,
+    instruction: source.instruction,
+    attachments: source.attachments,
+    formats: source.formats,
+    variant_count: source.variant_count,
+    template_id: source.template_id,
+    created_by: createdBy,
+  });
+
+  await updateRun(run.id, {
+    state: source.state === "results" ? "results" : source.state,
+    steps: source.steps,
+    logs: [],
+    brief: source.brief,
+    variants: source.variants,
+    captions: source.captions,
+    guard: source.guard,
+    finished_at: new Date().toISOString(),
+    duration_ms: source.duration_ms,
+  });
+
+  const assets: Asset[] = source.assets.map((a) => ({
+    id: crypto.randomUUID(),
+    run_id: run.id,
+    variant_index: a.variant_index,
+    format: a.format,
+    render_url: `/api/render/${run.id}/${a.variant_index}/${a.format}`,
+    width: a.width,
+    height: a.height,
+    template_id: a.template_id,
+    source_documents: a.source_documents,
+    // L'impaginazione si eredita; il verdetto e l'approvazione no: si ricontrolla.
+    layout: a.layout ?? null,
+    guard: null,
+    guard_status: null,
+    guard_checked_at: null,
+    approval_id: null,
+    approved_by: null,
+    approved_at: null,
+  }));
+  await replaceAssets(run.id, assets);
+
+  return (await getRun(run.id)) ?? { ...run, assets };
+}
+
+/* ------------------------------------------------------------------ */
 /* Coda di pubblicazione                                                */
 /* ------------------------------------------------------------------ */
 

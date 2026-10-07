@@ -14,6 +14,7 @@ export function studioNav(role: Role): NavItem[] {
   const items: NavItem[] = [
     { href: "/studio", label: "Studio" },
     { href: "/studio/storico", label: "I miei lavori" },
+    { href: "/studio/archivio", label: "Archivio" },
   ];
   if (role === "approver") {
     items.push({ href: "/studio/approvazioni", label: "Approvazioni" });
