@@ -121,6 +121,15 @@ create index if not exists assets_run_id_idx on assets (run_id);
 comment on column assets.source_documents is
   'Quali documenti sorgente hanno prodotto questo asset. Requisito di tracciabilita.';
 
+-- Brand-guard: l'impaginazione controllata e il verdetto (migrazione 008).
+alter table assets add column if not exists layout           jsonb;
+alter table assets add column if not exists guard            jsonb;
+alter table assets add column if not exists guard_status     text
+  check (guard_status in ('pass','warn','fail'));
+alter table assets add column if not exists guard_checked_at timestamptz;
+
+create index if not exists assets_guard_status_idx on assets (guard_status);
+
 -- ---------------------------------------------------------------
 -- Approvazioni — la pubblicazione richiede un approver
 -- ---------------------------------------------------------------

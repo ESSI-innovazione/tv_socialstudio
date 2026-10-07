@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { Check, ChevronDown, CircleAlert, PencilRuler, RotateCcw, TriangleAlert } from "lucide-react";
 import { FORMATS, UNVERIFIED, type FormatId } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
@@ -19,6 +19,13 @@ interface Props {
   onReset: () => void;
   user: StudioUser;
   channelsLive: boolean;
+  /**
+   * Le impaginazioni toccate, per chiave `variante:formato`. Vivono nella
+   * console e non qui, perche' anche la colonna di destra deve conoscerle:
+   * il brand-guard controlla quello che si vede, non il template.
+   */
+  layouts: Record<string, AssetLayout>;
+  onLayouts: Dispatch<SetStateAction<Record<string, AssetLayout>>>;
 }
 
 type Tab = "testo" | "fonti";
@@ -37,14 +44,13 @@ const PREVIEW_WIDTH: Record<FormatId, number> = {
  * Il ritocco leggero — il testo — sta sotto, in una scheda. Quello serio
  * apre l'editor a tutto schermo, dove stanno anche export e pubblicazione.
  */
-export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, user, channelsLive }: Props) {
+export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, user, channelsLive, layouts, onLayouts: setLayouts }: Props) {
   const variant = run.variants.find((v) => v.index === selected) ?? run.variants[0];
   const blocking = run.guard.some((c) => c.status === "fail");
 
   const [format, setFormat] = useState<FormatId>(run.formats[0] ?? "linkedin");
   const [tab, setTab] = useState<Tab>("testo");
   const [editing, setEditing] = useState(false);
-  const [layouts, setLayouts] = useState<Record<string, AssetLayout>>({});
 
   const archetype = archetypeFromLabel(variant?.layout);
   const layoutKey = `${variant?.index ?? 0}:${format}`;
@@ -53,7 +59,7 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
   const layout = layouts[layoutKey] ?? templateLayout(format, archetype, text);
   const onLayoutChange = useCallback(
     (next: AssetLayout) => setLayouts((current) => ({ ...current, [layoutKey]: next })),
-    [layoutKey],
+    [layoutKey, setLayouts],
   );
 
   /**
@@ -73,7 +79,7 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
         return next;
       });
     },
-    [variant, run.formats, archetype, text],
+    [variant, run.formats, archetype, text, setLayouts],
   );
 
   /** Il colore di un testo, su tutti i formati in cui quel blocco esiste. */
@@ -95,7 +101,7 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
         return next;
       });
     },
-    [variant, run.formats, archetype, text],
+    [variant, run.formats, archetype, text, setLayouts],
   );
 
   const modified = Boolean(layouts[layoutKey]);

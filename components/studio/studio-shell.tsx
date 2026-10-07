@@ -5,7 +5,8 @@ import type { FormatId } from "@/lib/brand";
 import { mockScript, startMockRun } from "@/lib/mock-run";
 import { applyEvent } from "@/lib/run-events";
 import { SAMPLE_ATTACHMENTS } from "@/lib/seed-data";
-import type { Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
+import type { AssetLayout } from "@/lib/layout-model";
+import type { Asset, Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib/types";
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
@@ -44,6 +45,26 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
   const [state, setState] = useState<RunState>(restorable ? restorable.state : "composing");
   const [run, setRun] = useState<Run | null>(restorable);
   const [selected, setSelected] = useState(0);
+
+  /**
+   * Le impaginazioni ritoccate nell'editor, per chiave `variante:formato`.
+   * Al ripristino partono da quelle che il brand-guard ha gia' salvato sugli
+   * asset: cosi' un refresh non riporta il template al posto del lavoro fatto.
+   */
+  const [layouts, setLayouts] = useState<Record<string, AssetLayout>>(() => {
+    const out: Record<string, AssetLayout> = {};
+    for (const a of restorable?.assets ?? []) if (a.layout) out[`${a.variant_index}:${a.format}`] = a.layout;
+    return out;
+  });
+
+  /** Gli asset tornati dal server (brand-guard, approvazione) prendono il posto dei vecchi. */
+  const mergeAssets = useCallback((assets: Asset[]) => {
+    setRun((prev) => {
+      if (!prev) return prev;
+      const byId = new Map(assets.map((a) => [a.id, a]));
+      return { ...prev, assets: prev.assets.map((a) => byId.get(a.id) ?? a) };
+    });
+  }, []);
 
   // Si parte da zero: lo strumento scelto al passo 1 porta il suo brief e i suoi formati.
   const [instruction, setInstruction] = useState("");
@@ -166,6 +187,7 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
     if (!created) saved.current.add(fresh.id);
 
     edits.current = 0;
+    setLayouts({});
     setRun(fresh);
     setSelected(0);
     setState("running");
@@ -252,6 +274,8 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
               onReset={reset}
               user={user}
               channelsLive={channelsLive}
+              layouts={layouts}
+              onLayouts={setLayouts}
             />
           ) : null}
         </main>
@@ -265,6 +289,8 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
           selected={selected}
           user={user}
           channelsLive={channelsLive}
+          layouts={layouts}
+          onAssets={mergeAssets}
         />
       </div>
     </div>

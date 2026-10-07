@@ -347,6 +347,28 @@ export async function replaceAssets(runId: string, rows: Asset[]): Promise<Asset
   return data as Asset[];
 }
 
+/** Aggiorna un asset: l'esito del brand-guard, l'impaginazione controllata. */
+export async function updateAsset(id: string, patch: Partial<Asset>): Promise<Asset | null> {
+  const supabase = db();
+  if (!supabase) {
+    for (const run of memory().runs) {
+      const hit = run.assets.find((a) => a.id === id);
+      if (hit) {
+        Object.assign(hit, patch);
+        return hit;
+      }
+    }
+    return null;
+  }
+
+  const { data, error } = await supabase.from("assets").update(patch).eq("id", id).select().maybeSingle();
+  if (error) {
+    console.error("[db] updateAsset", error.message);
+    return null;
+  }
+  return (data as Asset) ?? null;
+}
+
 export async function getAsset(id: string): Promise<Asset | null> {
   const supabase = db();
   if (!supabase) {

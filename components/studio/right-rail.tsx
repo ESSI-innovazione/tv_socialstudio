@@ -1,12 +1,14 @@
 "use client";
 
-import { Building2, Camera, CalendarClock, Check, Download, LoaderCircle, Lock, Send } from "lucide-react";
+import { Building2, Camera, LoaderCircle } from "lucide-react";
 import { FORMATS, type FormatId } from "@/lib/brand";
 import { deadlineLabel, daysUntil } from "@/lib/format";
-import type { Run, RunState } from "@/lib/types";
+import type { AssetLayout } from "@/lib/layout-model";
+import type { Asset, Run, RunState } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { AssetPreview } from "./asset-preview";
 import { LogoMark } from "./logo";
+import { PublishFlow } from "./publish-flow";
 
 interface Props {
   state: RunState;
@@ -18,13 +20,16 @@ interface Props {
   selected: number;
   user: StudioUser;
   channelsLive: boolean;
+  /** Le impaginazioni ritoccate: il brand-guard controlla quelle. */
+  layouts: Record<string, AssetLayout>;
+  onAssets: (assets: Asset[]) => void;
 }
 
 /**
  * La colonna di destra fa una cosa sola: mostra cosa si sta per ottenere,
  * o cosa si e' ottenuto. Niente regole, niente stato dei canali.
  */
-export function RightRail({ state, formats, variantCount, photoUrl, run, selected, user, channelsLive }: Props) {
+export function RightRail({ state, formats, variantCount, photoUrl, run, selected, user, channelsLive, layouts, onAssets }: Props) {
   return (
     <aside
       className="tv-scroll flex w-[372px] shrink-0 flex-col gap-5 overflow-y-auto bg-paper p-5"
@@ -33,7 +38,9 @@ export function RightRail({ state, formats, variantCount, photoUrl, run, selecte
     >
       {state === "composing" ? <Sheets formats={formats} variantCount={variantCount} photoUrl={photoUrl} /> : null}
       {state === "running" ? <RunningRail run={run} /> : null}
-      {state === "results" && run ? <PublishRail run={run} selected={selected} user={user} channelsLive={channelsLive} /> : null}
+      {state === "results" && run ? (
+        <PublishRail run={run} selected={selected} user={user} channelsLive={channelsLive} layouts={layouts} onAssets={onAssets} />
+      ) : null}
     </aside>
   );
 }
@@ -168,9 +175,21 @@ function Row({ label, value }: { label: string; value: string }) {
 /* results — pubblicazione                                              */
 /* ------------------------------------------------------------------ */
 
-function PublishRail({ run, selected, user, channelsLive }: { run: Run; selected: number; user: StudioUser; channelsLive: boolean }) {
-  const blocked = run.guard.some((c) => c.status === "fail");
-  const canPublish = user.role === "approver" && !blocked;
+function PublishRail({
+  run,
+  selected,
+  user,
+  channelsLive,
+  layouts,
+  onAssets,
+}: {
+  run: Run;
+  selected: number;
+  user: StudioUser;
+  channelsLive: boolean;
+  layouts: Record<string, AssetLayout>;
+  onAssets: (assets: Asset[]) => void;
+}) {
   const days = daysUntil(run.brief?.deadline ?? null);
 
   return (
@@ -207,62 +226,7 @@ function PublishRail({ run, selected, user, channelsLive }: { run: Run; selected
         </p>
       ) : null}
 
-      <div className="mt-auto flex flex-col gap-2 pt-2">
-        <div
-          className="flex items-center gap-2.5 rounded-card px-3.5 py-3 text-[13px] leading-[1.45]"
-          style={{
-            background: canPublish ? "var(--color-success-bg)" : "var(--color-warm-tint)",
-            color: canPublish ? "var(--color-success)" : "var(--color-warning)",
-          }}
-        >
-          {canPublish ? <Check size={16} strokeWidth={2.2} className="shrink-0" /> : <Lock size={16} strokeWidth={2} className="shrink-0" />}
-          <span>
-            {blocked
-              ? "Il controllo del brand ha bloccato la pubblicazione."
-              : canPublish
-                ? `${user.name} può pubblicare.`
-                : "Serve un approvatore per pubblicare. La bozza resta in attesa."}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          disabled={!canPublish && blocked}
-          className="tv-pill h-[46px] w-full justify-center gap-2 text-[14.5px] transition-all"
-          style={{
-            background: blocked ? "var(--color-mute)" : "var(--color-coral)",
-            color: "#ffffff",
-            boxShadow: blocked ? "none" : "var(--shadow-coral)",
-            cursor: blocked ? "not-allowed" : "pointer",
-          }}
-        >
-          <Send size={16} strokeWidth={2.2} />
-          {canPublish ? "Pubblica" : "Richiedi approvazione"}
-        </button>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="tv-pill h-[40px] cursor-pointer justify-center gap-2 text-[13px] transition-colors hover:bg-line-soft"
-            style={{ border: "1px solid var(--color-line)", color: "var(--color-ink-soft)" }}
-          >
-            <Download size={15} strokeWidth={1.9} />
-            Scarica
-          </button>
-          <button
-            type="button"
-            className="tv-pill h-[40px] cursor-pointer justify-center gap-2 text-[13px] transition-colors hover:bg-line-soft"
-            style={{ border: "1px solid var(--color-line)", color: "var(--color-ink-soft)" }}
-          >
-            <CalendarClock size={15} strokeWidth={1.9} />
-            Programma
-          </button>
-        </div>
-        {!channelsLive ? (
-          <p className="pt-1 text-center text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-            I canali non sono ancora collegati: la pubblicazione non parte da qui.
-          </p>
-        ) : null}
-      </div>
+      <PublishFlow run={run} selected={selected} layouts={layouts} user={user} channelsLive={channelsLive} onAssets={onAssets} />
     </>
   );
 }

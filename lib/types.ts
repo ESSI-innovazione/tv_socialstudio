@@ -1,4 +1,5 @@
 import type { FormatId } from "./brand";
+import type { AssetLayout } from "./layout-model";
 
 /* ------------------------------------------------------------------ */
 /* Ruoli e profili                                                      */
@@ -154,6 +155,15 @@ export interface Asset {
   /** Provenienza: cosa ha prodotto questo asset. */
   template_id: string | null;
   source_documents: string[];
+  /**
+   * L'impaginazione controllata dal brand-guard, cosi' com'era. E' quella
+   * che viene resa e pubblicata. Assente finche' nessuno l'ha verificata.
+   */
+  layout?: AssetLayout | null;
+  /** Le verifiche del brand-guard su questo asset e il loro verdetto. */
+  guard?: GuardCheck[] | null;
+  guard_status?: GuardStatus | null;
+  guard_checked_at?: string | null;
 }
 
 export interface Run {
