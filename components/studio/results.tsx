@@ -5,7 +5,8 @@ import { Check, ChevronDown, CircleAlert, PencilRuler, RotateCcw, TriangleAlert 
 import { FORMATS, UNVERIFIED, type FormatId } from "@/lib/brand";
 import { durationLabel } from "@/lib/format";
 import { archetypeFromLabel, templateLayout, updateBlock, updateStyle, type AssetLayout, type BlockKind, type BlockText, type LayoutStyle } from "@/lib/layout-model";
-import type { GuardCheck, Run, VariantCopy } from "@/lib/types";
+import type { Asset, GuardCheck, Run, VariantCopy } from "@/lib/types";
+import type { ChannelStatus } from "@/lib/publish";
 import type { StudioUser } from "@/auth";
 import { AssetPreview } from "./asset-preview";
 import { AssetWorkbench } from "./asset-workbench";
@@ -18,7 +19,8 @@ interface Props {
   onPhoto: (url: string) => void;
   onReset: () => void;
   user: StudioUser;
-  channelsLive: boolean;
+  channels: ChannelStatus;
+  onAssets: (assets: Asset[]) => void;
   /**
    * Le impaginazioni toccate, per chiave `variante:formato`. Vivono nella
    * console e non qui, perche' anche la colonna di destra deve conoscerle:
@@ -44,7 +46,7 @@ const PREVIEW_WIDTH: Record<FormatId, number> = {
  * Il ritocco leggero — il testo — sta sotto, in una scheda. Quello serio
  * apre l'editor a tutto schermo, dove stanno anche export e pubblicazione.
  */
-export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, user, channelsLive, layouts, onLayouts: setLayouts }: Props) {
+export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, user, channels, onAssets, layouts, onLayouts: setLayouts }: Props) {
   const variant = run.variants.find((v) => v.index === selected) ?? run.variants[0];
   const blocking = run.guard.some((c) => c.status === "fail");
 
@@ -267,7 +269,8 @@ export function Results({ run, selected, onSelect, onEdit, onPhoto, onReset, use
           onEdit={(patch) => onEdit(variant.index, patch)}
           onPhoto={onPhoto}
           user={user}
-          channelsLive={channelsLive}
+          channels={channels}
+          onAssets={onAssets}
           onClose={() => setEditing(false)}
         />
       ) : null}

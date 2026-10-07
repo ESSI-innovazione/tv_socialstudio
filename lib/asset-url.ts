@@ -8,12 +8,12 @@ import type { Asset } from "./types";
  * e, se il brand-guard ha salvato un'impaginazione, la si porta nel link:
  * e' quella approvata, ed e' quella che deve uscire.
  */
-export function assetFileUrl(asset: Asset, extension: "png" | "pdf" = "png", baseUrl = ""): string {
+export function assetFileUrl(asset: Asset, extension: "png" | "jpg" | "pdf" = "png", baseUrl = ""): string {
   const query = asset.layout ? `?layout=${encodeLayout(asset.layout)}` : "";
   return `${baseUrl}${asset.render_url}.${extension}${query}`;
 }
 
 /** Il nome del file scaricato: leggibile, con variante e formato. */
-export function assetFileName(asset: Asset, extension: "png" | "pdf" = "png", prefix = "timevision"): string {
+export function assetFileName(asset: Asset, extension: "png" | "jpg" | "pdf" = "png", prefix = "timevision"): string {
   return `${prefix}-v${asset.variant_index + 1}-${asset.format}.${extension}`;
 }

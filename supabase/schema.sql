@@ -203,6 +203,15 @@ create table if not exists scheduled_posts (
 create index if not exists scheduled_posts_due_idx
   on scheduled_posts (scheduled_for) where status = 'scheduled';
 
+-- Pubblicazione come lavoro: autore, variante, tentativi, presa in carico (migrazione 010).
+alter table scheduled_posts add column if not exists created_by    text;
+alter table scheduled_posts add column if not exists variant_index integer;
+alter table scheduled_posts add column if not exists attempts      integer not null default 0;
+alter table scheduled_posts add column if not exists claimed_at    timestamptz;
+
+create index if not exists scheduled_posts_calendar_idx
+  on scheduled_posts (coalesce(scheduled_for, published_at, created_at));
+
 -- ---------------------------------------------------------------
 -- RLS: l'app parla al database con la service role key dal server.
 -- Le policy restano attive per bloccare qualunque accesso anon.

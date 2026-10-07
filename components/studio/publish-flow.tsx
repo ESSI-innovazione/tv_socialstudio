@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Check, ChevronDown, CircleAlert, LoaderCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { FORMATS } from "@/lib/brand";
 import { overallStatus } from "@/lib/brand-guard";
 import type { AssetLayout } from "@/lib/layout-model";
-import type { Asset, GuardCheck, GuardStatus, Run } from "@/lib/types";
+import type { ChannelStatus } from "@/lib/publish";
+import type { Approval, Asset, GuardCheck, GuardStatus, Run } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { ApprovalStep } from "./approval-step";
+import { PublishStep } from "./publish-step";
 
 interface Props {
   run: Run;
   selected: number;
   layouts: Record<string, AssetLayout>;
   user: StudioUser;
-  channelsLive: boolean;
+  channels: ChannelStatus;
   /** Gli asset aggiornati dal server, da fondere nell'esecuzione. */
   onAssets: (assets: Asset[]) => void;
 }
@@ -24,16 +26,21 @@ interface Props {
  * brand, l'approvazione, il canale. Ogni passo si sblocca col precedente,
  * e ogni verdetto arriva dal server: il client qui chiede, non decide.
  */
-export function PublishFlow({ run, selected, layouts, user, onAssets }: Props) {
+export function PublishFlow({ run, selected, layouts, user, channels, onAssets }: Props) {
   const assets = run.assets.filter((a) => a.variant_index === selected);
   const saved = assets.length > 0;
   const guard = overallStatus(assets.map((a) => a.guard_status));
   const guardOk = guard === "pass" || guard === "warn";
 
+  const [approval, setApproval] = useState<Approval["status"] | null>(null);
+  const onStatus = useCallback((status: Approval["status"] | null) => setApproval(status), []);
+  const approved = approval === "approved" || (saved && assets.every((a) => a.approved_at));
+
   return (
     <div className="mt-auto flex flex-col gap-3 pt-2">
       <GuardStep run={run} selected={selected} assets={assets} layouts={layouts} status={guard} saved={saved} onAssets={onAssets} />
-      <ApprovalStep run={run} selected={selected} guardOk={guardOk} user={user} onAssets={onAssets} />
+      <ApprovalStep run={run} selected={selected} guardOk={guardOk} user={user} onAssets={onAssets} onStatus={onStatus} />
+      {approved && guardOk ? <PublishStep run={run} assets={assets} channels={channels} /> : null}
     </div>
   );
 }

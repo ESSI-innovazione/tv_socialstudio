@@ -36,6 +36,14 @@ export const env = {
   get igUserId() {
     return read("IG_USER_ID");
   },
+  /** La versione della Graph API. Si alza dall'ambiente quando Meta ritira quella vecchia. */
+  get igGraphVersion() {
+    return read("IG_GRAPH_VERSION") ?? "v21.0";
+  },
+  /** La versione mensile della Posts API di LinkedIn (YYYYMM). */
+  get linkedinApiVersion() {
+    return read("LINKEDIN_API_VERSION") ?? "202506";
+  },
   get gammaApiKey() {
     return read("GAMMA_API_KEY");
   },

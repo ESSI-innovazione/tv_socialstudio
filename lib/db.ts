@@ -862,7 +862,7 @@ export async function getDuePosts(now = new Date()): Promise<ScheduledPost[]> {
 
 export async function markPost(
   id: string,
-  patch: Partial<Pick<ScheduledPost, "status" | "published_at" | "external_id" | "error">>,
+  patch: Partial<Pick<ScheduledPost, "status" | "published_at" | "external_id" | "error" | "attempts" | "claimed_at" | "scheduled_for">>,
 ): Promise<void> {
   const supabase = db();
   if (!supabase) {
@@ -873,6 +873,125 @@ export async function markPost(
 
   const { error } = await supabase.from("scheduled_posts").update(patch).eq("id", id);
   if (error) console.error("[db] markPost", error.message);
+}
+
+export type NewPost = Pick<
+  ScheduledPost,
+  "run_id" | "channel" | "surface" | "caption" | "hashtags" | "asset_id" | "variant_index" | "status" | "scheduled_for" | "created_by"
+>;
+
+export async function createPost(input: NewPost): Promise<ScheduledPost> {
+  const row: ScheduledPost = {
+    id: crypto.randomUUID(),
+    ...input,
+    published_at: null,
+    external_id: null,
+    error: null,
+    attempts: 0,
+    claimed_at: null,
+    created_at: new Date().toISOString(),
+  };
+
+  const supabase = db();
+  if (!supabase) {
+    memory().posts.push(row);
+    return row;
+  }
+
+  const { data, error } = await supabase.from("scheduled_posts").insert(row).select().single();
+  if (error) throw new Error(`Non riesco a registrare il post: ${error.message}`);
+  return data as ScheduledPost;
+}
+
+export async function getPost(id: string): Promise<ScheduledPost | null> {
+  const supabase = db();
+  if (!supabase) return memory().posts.find((p) => p.id === id) ?? null;
+
+  const { data, error } = await supabase.from("scheduled_posts").select("*").eq("id", id).maybeSingle();
+  if (error) {
+    console.error("[db] getPost", error.message);
+    return null;
+  }
+  return (data as ScheduledPost) ?? null;
+}
+
+/** La data che conta per il calendario: quella di pubblicazione, o quella prevista. */
+export function postDate(post: ScheduledPost): string {
+  return post.published_at ?? post.scheduled_for ?? post.created_at;
+}
+
+/** I post di un intervallo, per il calendario. */
+export async function listPostsBetween(from: Date, to: Date): Promise<ScheduledPost[]> {
+  const inRange = (p: ScheduledPost) => {
+    const t = new Date(postDate(p)).getTime();
+    return t >= from.getTime() && t <= to.getTime();
+  };
+
+  const supabase = db();
+  if (!supabase) return memory().posts.filter(inRange).sort((a, b) => postDate(a).localeCompare(postDate(b)));
+
+  // Il filtro per data e' su due colonne alternative: si legge un po' piu'
+  // largo e si stringe in memoria, che sono comunque poche righe al mese.
+  const { data, error } = await supabase
+    .from("scheduled_posts")
+    .select("*")
+    .or(
+      `and(scheduled_for.gte.${from.toISOString()},scheduled_for.lte.${to.toISOString()}),` +
+        `and(published_at.gte.${from.toISOString()},published_at.lte.${to.toISOString()})`,
+    )
+    .limit(500);
+
+  if (error) {
+    console.error("[db] listPostsBetween", error.message);
+    return [];
+  }
+  return (data as ScheduledPost[]).filter(inRange).sort((a, b) => postDate(a).localeCompare(postDate(b)));
+}
+
+export async function deletePost(id: string): Promise<void> {
+  const supabase = db();
+  if (!supabase) {
+    const store = memory();
+    store.posts = store.posts.filter((p) => p.id !== id);
+    return;
+  }
+
+  const { error } = await supabase.from("scheduled_posts").delete().eq("id", id);
+  if (error) console.error("[db] deletePost", error.message);
+}
+
+/**
+ * Prende in carico un post da pubblicare. Torna la riga solo se nessun'altra
+ * funzione la tiene: e' il lucchetto che impedisce a due esecuzioni del cron
+ * di pubblicare lo stesso post due volte. Un claim piu' vecchio di `ttlMs`
+ * e' di una funzione morta e si puo' riprendere.
+ */
+export async function claimPost(id: string, now: Date, ttlMs: number): Promise<ScheduledPost | null> {
+  const stale = new Date(now.getTime() - ttlMs).toISOString();
+
+  const supabase = db();
+  if (!supabase) {
+    const row = memory().posts.find((p) => p.id === id);
+    if (!row || row.status !== "scheduled") return null;
+    if (row.claimed_at && row.claimed_at > stale) return null;
+    row.claimed_at = now.toISOString();
+    return row;
+  }
+
+  const { data, error } = await supabase
+    .from("scheduled_posts")
+    .update({ claimed_at: now.toISOString() })
+    .eq("id", id)
+    .eq("status", "scheduled")
+    .or(`claimed_at.is.null,claimed_at.lt.${stale}`)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[db] claimPost", error.message);
+    return null;
+  }
+  return (data as ScheduledPost) ?? null;
 }
 
 /** Incrementa il contatore di esecuzioni di uno strumento. */

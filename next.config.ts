@@ -15,7 +15,9 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core", "ffmpeg-static"],
 
   outputFileTracingIncludes: {
-    "/api/render/**": ["./node_modules/@sparticuz/chromium/bin/**"],
+    // Il JPEG per Instagram e il PDF del poster aprono Chromium e leggono
+    // font e fotografie dal disco: come per il video, tutto viaggia con la funzione.
+    "/api/render/**": ["./node_modules/@sparticuz/chromium/bin/**", "./assets/fonts/**", "./public/brand/*.jpg"],
     // Il video apre Chromium, lancia ffmpeg e legge font e musica dal disco:
     // tutto va portato con la funzione, o in produzione manca in silenzio.
     "/api/videos": [

@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  Building2,
-  Camera,
   Download,
   FileImage,
   FileText,
@@ -23,10 +21,8 @@ import {
 } from "lucide-react";
 import { BRAND, FORMATS, type FormatId } from "@/lib/brand";
 import { DEFAULT_FONT, FONTS, FONT_IDS, fontFamilyFor } from "@/lib/fonts";
-import { can } from "@/lib/permissions";
 import {
   BLOCK_LABELS,
-  encodeLayout,
   fontSizeOf,
   ladderFor,
   minStepOf,
@@ -39,11 +35,13 @@ import {
   type LayoutStyle,
 } from "@/lib/layout-model";
 import { defaultTextColor, groundOf } from "./asset-canvas";
-import type { Caption, Run, VariantCopy } from "@/lib/types";
+import type { Asset, Run, VariantCopy } from "@/lib/types";
+import type { ChannelStatus } from "@/lib/publish";
 import type { StudioUser } from "@/auth";
 import { AssetEditor } from "./asset-editor";
 import { ImagePicker } from "./image-picker";
 import { VideoExport } from "./video-export";
+import { PublishFlow } from "./publish-flow";
 
 interface Props {
   run: Run;
@@ -62,7 +60,8 @@ interface Props {
   onEdit: (patch: Partial<VariantCopy>) => void;
   onPhoto: (url: string) => void;
   user: StudioUser;
-  channelsLive: boolean;
+  channels: ChannelStatus;
+  onAssets: (assets: Asset[]) => void;
   onClose: () => void;
 }
 
@@ -119,7 +118,8 @@ export function AssetWorkbench({
   onEdit,
   onPhoto,
   user,
-  channelsLive,
+  channels,
+  onAssets,
   onClose,
 }: Props) {
   const [panel, setPanel] = useState<Panel>("testo");
@@ -242,7 +242,7 @@ export function AssetWorkbench({
           ) : null}
           {panel === "foto" ? <PhotoPanel current={photo} format={format} onPhoto={onPhoto} /> : null}
           {panel === "esporta" ? <ExportPanel run={run} variant={variant} layouts={layouts} /> : null}
-          {panel === "pubblica" ? <PublishPanel run={run} user={user} channelsLive={channelsLive} /> : null}
+          {panel === "pubblica" ? <PublishFlow run={run} selected={variant.index} layouts={layouts} user={user} channels={channels} onAssets={onAssets} /> : null}
         </aside>
       </div>
     </div>
@@ -573,19 +573,31 @@ function PhotoPanel({ current, format, onPhoto }: { current: string; format: For
 const FILE_TYPES: { id: FileType; label: string; hint: string; icon: typeof FileImage; ready: boolean }[] = [
   { id: "png", label: "PNG", hint: "alla dimensione esatta del formato", icon: FileImage, ready: true },
   { id: "mp4", label: "MP4", hint: "video di 8 secondi: l'asset prende vita", icon: Video, ready: true },
-  { id: "pdf", label: "PDF", hint: "per la stampa, 300 dpi", icon: FileText, ready: false },
+  { id: "pdf", label: "PDF", hint: "il poster A4 per la stampa, 210 × 297 mm, testo vettoriale", icon: FileText, ready: true },
+  // SVG e PPTX non esistono ancora: un bottone che finge e' peggio di nessun
+  // bottone, quindi restano in elenco ma non si mostrano.
   { id: "svg", label: "SVG", hint: "vettoriale, per l'agenzia", icon: Hash, ready: false },
   { id: "pptx", label: "PPTX", hint: "una slide per formato", icon: Presentation, ready: false },
 ];
 
+/** Il PDF esiste solo per il poster: la stampa e' il suo unico motivo. */
+const PDF_FORMATS: FormatId[] = ["poster-a4"];
+
 function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy; layouts: Record<string, AssetLayout> }) {
+  const hasPoster = run.formats.includes("poster-a4");
+  const available = FILE_TYPES.filter((t) => t.ready && (t.id !== "pdf" || hasPoster));
+
   const [type, setType] = useState<FileType>("png");
   const [formats, setFormats] = useState<FormatId[]>(run.formats);
   const [all, setAll] = useState(false);
 
   const toggle = (f: FormatId) => setFormats((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
-  const chosen = FILE_TYPES.find((t) => t.id === type)!;
+  const chosen = available.find((t) => t.id === type) ?? available[0];
   const variants = all ? run.variants : [variant];
+  // Per il PDF l'elenco dei formati si riduce al poster: gli altri non si stampano.
+  const offered = chosen.id === "pdf" ? PDF_FORMATS : run.formats;
+  const picked = formats.filter((f) => offered.includes(f));
+  const extension = chosen.id === "pdf" ? "pdf" : "png";
 
   return (
     <>
@@ -593,8 +605,8 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
 
       <div className="flex flex-col gap-1.5">
         <p className="tv-label">FILE</p>
-        {FILE_TYPES.map((t) => {
-          const on = t.id === type;
+        {available.map((t) => {
+          const on = t.id === chosen.id;
           const Icon = t.icon;
           return (
             <button
@@ -614,11 +626,6 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
                   {t.hint}
                 </span>
               </span>
-              {!t.ready ? (
-                <span className="tv-pill h-[20px] px-2 text-[10.5px]" style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}>
-                  in arrivo
-                </span>
-              ) : null}
             </button>
           );
         })}
@@ -626,8 +633,8 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
 
       <div className="flex flex-col gap-1.5">
         <p className="tv-label">FORMATI</p>
-        {run.formats.map((f) => {
-          const on = formats.includes(f);
+        {offered.map((f) => {
+          const on = picked.includes(f);
           return (
             <label key={f} className="flex cursor-pointer items-center gap-2.5 text-[13.5px]" style={{ color: "var(--color-ink)" }}>
               <input type="checkbox" checked={on} onChange={() => toggle(f)} className="h-4 w-4 accent-[#ce4257]" />
@@ -646,151 +653,48 @@ function ExportPanel({ run, variant, layouts }: { run: Run; variant: VariantCopy
       </label>
 
       {chosen.id === "mp4" ? (
-        <VideoExport run={run} variants={variants} formats={formats} layouts={layouts} />
-      ) : chosen.ready ? (
+        <VideoExport run={run} variants={variants} formats={picked} layouts={layouts} />
+      ) : (
         <div className="flex flex-col gap-1.5">
           <p className="tv-label">SCARICA</p>
+          {chosen.id === "pdf" ? (
+            <p className="text-[12px] leading-[1.45]" style={{ color: "var(--color-ink-faint)" }}>
+              Il PDF lo stampa Chromium: qualche secondo di attesa. Testo e marchio restano vettoriali.
+            </p>
+          ) : null}
           {variants.flatMap((v) =>
-            formats.map((f) => {
+            picked.map((f) => {
               // L'impaginazione modificata non ha un posto nel database:
-              // viaggia nel link, e il PNG esce come lo si vede.
+              // viaggia nel link, e il file esce come lo si vede.
               const custom = layouts[`${v.index}:${f}`];
-              const href = `/api/render/${run.id}/${v.index}/${f}.png${custom ? `?layout=${encodeLayout(custom)}` : ""}`;
+              const query = new URLSearchParams();
+              if (custom) query.set("layout", JSON.stringify(custom));
+              if (extension === "pdf") query.set("download", "1");
+              const href = `/api/render/${run.id}/${v.index}/${f}.${extension}${query.size ? `?${query}` : ""}`;
               return (
-              <a
-                key={`${v.index}-${f}`}
-                href={href}
-                download={`timevision-v${v.index + 1}-${f}.png`}
-                className="tv-pill h-[38px] gap-2 px-3.5 text-[13px] transition-colors hover:bg-line-soft"
-                style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
-              >
-                <Download size={14} strokeWidth={2} style={{ color: "var(--color-rose)" }} />
-                V{v.index + 1} · {FORMATS[f].label}
-                <span className="ml-auto text-[11.5px] font-normal" style={{ color: "var(--color-ink-faint)" }}>
-                  {FORMATS[f].width}×{FORMATS[f].height}
-                </span>
-              </a>
+                <a
+                  key={`${v.index}-${f}`}
+                  href={href}
+                  download={`timevision-v${v.index + 1}-${f}.${extension}`}
+                  className="tv-pill h-[38px] gap-2 px-3.5 text-[13px] transition-colors hover:bg-line-soft"
+                  style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
+                >
+                  <Download size={14} strokeWidth={2} style={{ color: "var(--color-rose)" }} />
+                  V{v.index + 1} · {FORMATS[f].label}
+                  <span className="ml-auto text-[11.5px] font-normal" style={{ color: "var(--color-ink-faint)" }}>
+                    {extension === "pdf" ? "210 × 297 mm" : `${FORMATS[f].width}×${FORMATS[f].height}`}
+                  </span>
+                </a>
               );
             }),
           )}
-          {formats.length === 0 ? (
+          {picked.length === 0 ? (
             <p className="text-[12.5px]" style={{ color: "var(--color-ink-faint)" }}>
               Scegli almeno un formato.
             </p>
           ) : null}
         </div>
-      ) : (
-        <p className="rounded-[10px] px-3 py-2.5 text-[12.5px] leading-[1.5]" style={{ background: "var(--color-warm-tint)", color: "var(--color-warning)" }}>
-          L&apos;export {chosen.label} non è ancora attivo. Nel frattempo il PNG esce alla dimensione esatta di ogni formato.
-        </p>
       )}
     </>
-  );
-}
-
-/* ---------------- pubblica ---------------- */
-
-const SLACK_CHANNELS = ["#marketing", "#direzione", "#commerciale"];
-
-function PublishPanel({ run, user, channelsLive }: { run: Run; user: StudioUser; channelsLive: boolean }) {
-  const blocked = run.guard.some((c) => c.status === "fail");
-  const approver = can(user, "publish");
-  const linkedin = run.captions.find((c) => c.channel === "linkedin") ?? null;
-  const instagram = run.captions.find((c) => c.channel === "instagram") ?? null;
-
-  return (
-    <>
-      <PanelTitle hint={blocked ? "Il controllo del brand ha bloccato la pubblicazione." : approver ? `${user.name} può pubblicare.` : "Serve un approvatore: la richiesta parte da qui."}>
-        PUBBLICA
-      </PanelTitle>
-
-      <Channel icon={Camera} name="Instagram" handle="@timevision" live={channelsLive} caption={instagram} blocked={blocked} approver={approver}>
-        <div className="flex gap-1.5">
-          {(["Feed", "Story"] as const).map((s, i) => (
-            <label key={s} className="flex cursor-pointer items-center gap-1.5 text-[12.5px]" style={{ color: "var(--color-ink)" }}>
-              <input type="checkbox" defaultChecked={i === 0 ? run.formats.includes("ig-feed") : run.formats.includes("ig-story")} className="h-3.5 w-3.5 accent-[#ce4257]" />
-              {s}
-            </label>
-          ))}
-        </div>
-      </Channel>
-
-      <Channel icon={Building2} name="LinkedIn" handle="Pagina Time Vision" live={channelsLive} caption={linkedin} blocked={blocked} approver={approver} />
-
-      {/* Slack non e' ancora collegato: il canale c'e', il webhook arriva dopo. Il brand guard vale anche qui. */}
-      <Channel icon={Hash} name="Slack" handle="condividi col team" live={false} caption={null} blocked={blocked} approver={true} verb="Condividi">
-        <select className="h-[34px] w-full rounded-[8px] px-2 text-[12.5px]" style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }} defaultValue={SLACK_CHANNELS[0]}>
-          {SLACK_CHANNELS.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </Channel>
-    </>
-  );
-}
-
-function Channel({
-  icon: Icon,
-  name,
-  handle,
-  live,
-  caption,
-  blocked,
-  approver,
-  verb = "Pubblica",
-  children,
-}: {
-  icon: typeof Camera;
-  name: string;
-  handle: string;
-  live: boolean;
-  caption: Caption | null;
-  blocked: boolean;
-  approver: boolean;
-  verb?: string;
-  children?: React.ReactNode;
-}) {
-  const [text, setText] = useState(caption ? `${caption.text}\n\n${caption.hashtags.map((h) => `#${h}`).join(" ")}` : "");
-  const can = live && !blocked && approver;
-  const label = blocked ? "Bloccato dal brand guard" : !live ? "Canale non collegato" : approver ? `${verb} su ${name}` : "Richiedi approvazione";
-
-  return (
-    <section className="flex flex-col gap-2.5 rounded-card p-3.5" style={{ border: "1px solid var(--color-line)" }}>
-      <div className="flex items-center gap-2">
-        <Icon size={16} strokeWidth={1.9} style={{ color: "var(--color-wine)" }} />
-        <span className="text-[13.5px] font-semibold" style={{ color: "var(--color-ink)" }}>
-          {name}
-        </span>
-        <span className="text-[11.5px]" style={{ color: "var(--color-ink-faint)" }}>
-          {handle}
-        </span>
-        <span className="tv-pill ml-auto h-[20px] px-2 text-[10.5px]" style={{ background: live ? "var(--color-success-bg)" : "var(--color-line-soft)", color: live ? "var(--color-success)" : "var(--color-ink-faint)" }}>
-          {live ? "collegato" : "da collegare"}
-        </span>
-      </div>
-      {children}
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={caption ? 5 : 2}
-        placeholder={caption ? undefined : "Un messaggio per il team…"}
-        className="tv-scroll w-full resize-none rounded-[10px] px-3 py-2.5 text-[12.5px] leading-[1.5] outline-none focus:shadow-focus"
-        style={{ border: "1px solid var(--color-line)", background: "var(--color-paper)", color: "var(--color-ink)" }}
-      />
-      <button
-        type="button"
-        disabled={!can && live}
-        className="tv-pill h-[38px] w-full justify-center gap-2 text-[13px] transition-colors"
-        style={{
-          background: can ? "var(--color-coral)" : "var(--color-line-soft)",
-          color: can ? "#ffffff" : "var(--color-ink-faint)",
-          cursor: can ? "pointer" : "not-allowed",
-        }}
-        title={live ? undefined : "Collega il canale nelle impostazioni per pubblicare da qui"}
-      >
-        <Send size={14} strokeWidth={2.2} />
-        {label}
-      </button>
-    </section>
   );
 }
