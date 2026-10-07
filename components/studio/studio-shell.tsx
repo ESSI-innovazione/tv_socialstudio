@@ -9,6 +9,7 @@ import type { Campaign, Run, RunState, Template, Tool, VariantCopy } from "@/lib
 import type { ImageChoice } from "@/lib/integrations/types";
 import type { StudioUser } from "@/auth";
 import { Composer } from "./composer";
+import { studioNav } from "./nav";
 import { Results } from "./results";
 import { RightRail } from "./right-rail";
 import { RunMonitor } from "./run-monitor";
@@ -30,6 +31,12 @@ interface Props {
 /**
  * Il prodotto e' una pagina sola. Qui vive la macchina a stati:
  * composing -> running -> results, senza mai cambiare rotta.
+ *
+ * L'esecuzione la guida ancora il driver simulato, ma la riga nasce sul
+ * server con l'utente della sessione, e il risultato — copy, caption,
+ * controllo del brand, asset — viene salvato appena il driver finisce.
+ * Ogni ritocco al testo viene salvato poco dopo, cosi' lo storico e
+ * l'archivio mostrano quello che si vede qui.
  */
 export function StudioShell({ user, tools, campaigns, templates, recentRuns, initialRun, channelsLive, figmaSyncedAt }: Props) {
   const restorable = initialRun && initialRun.variants.length > 0 ? initialRun : null;
@@ -73,23 +80,92 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
     if (tool.default_formats.length > 0) setFormats(tool.default_formats);
   };
 
+  /* ---------------- persistenza ---------------- */
+
+  /** Le esecuzioni gia' salvate per intero, per non riscriverle a ogni render. */
+  const saved = useRef<Set<string>>(new Set(restorable ? [restorable.id] : []));
+
+  // Appena il driver chiude, il risultato va sul server. Gli asset tornano
+  // con l'id definitivo e prendono il posto di quelli provvisori.
+  useEffect(() => {
+    if (state !== "results" || !run || saved.current.has(run.id)) return;
+    saved.current.add(run.id);
+    const body = {
+      state: run.state,
+      steps: run.steps,
+      logs: run.logs,
+      brief: run.brief,
+      variants: run.variants,
+      captions: run.captions,
+      guard: run.guard,
+      finished_at: run.finished_at,
+      duration_ms: run.duration_ms,
+      assets: run.assets,
+    };
+    fetch(`/api/runs/${run.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { run: Run | null } | null) => {
+        if (!data?.run) return;
+        const persisted = data.run;
+        setRun((prev) => (prev && prev.id === persisted.id ? { ...prev, assets: persisted.assets } : prev));
+      })
+      .catch(() => saved.current.delete(run.id));
+  }, [state, run]);
+
+  // I ritocchi al testo e alla foto: salvati con un po' di ritardo, in blocco.
+  const variants = run?.variants;
+  const photo = run?.brief?.photo;
+  const edits = useRef(0);
+  useEffect(() => {
+    if (state !== "results" || !run || !saved.current.has(run.id)) return;
+    // Il primo passaggio e' il risultato appena arrivato, non un ritocco.
+    if (edits.current++ === 0) return;
+    const id = run.id;
+    const body = JSON.stringify({ variants, brief: run.brief });
+    const t = setTimeout(() => {
+      fetch(`/api/runs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body }).catch(() => undefined);
+    }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variants, photo]);
+
+  /* ---------------- esecuzione ---------------- */
+
   /**
-   * Avvio dell'esecuzione. Oggi gli eventi arrivano dal driver simulato;
-   * al passo 3 arriveranno dallo stream della rotta, con lo stesso riduttore.
+   * Avvio dell'esecuzione. La riga nasce sul server, con l'utente della
+   * sessione; poi il driver simulato la popola evento dopo evento.
    */
-  const start = () => {
+  const start = async () => {
     clearTimers();
-    const fresh = startMockRun({
+    const input = {
       instruction,
       formats,
       attachments: [...attachments],
       templateId,
       campaignId,
-      toolSlug: activeTool ?? "social-kit",
+      toolSlug: activeTool ?? "libero",
       variantCount,
       createdBy: user.email,
-    });
+    };
 
+    let created: Run | null = null;
+    try {
+      const res = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (res.ok) created = ((await res.json()) as { run: Run }).run;
+    } catch {
+      // Senza server la console gira comunque: il lavoro non verra' salvato.
+    }
+
+    const fresh: Run = created
+      ? { ...startMockRun(input), id: created.id, created_at: created.created_at }
+      : startMockRun(input);
+    if (!created) saved.current.add(fresh.id);
+
+    edits.current = 0;
     setRun(fresh);
     setSelected(0);
     setState("running");
@@ -129,7 +205,15 @@ export function StudioShell({ user, tools, campaigns, templates, recentRuns, ini
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      <TopBar user={user} campaigns={campaigns} campaignId={campaignId} onCampaign={setCampaignId} figmaSyncedAt={figmaSyncedAt} brandKit="Brand Kit 2026" />
+      <TopBar
+        user={user}
+        nav={studioNav(user.role)}
+        campaigns={campaigns}
+        campaignId={campaignId}
+        onCampaign={setCampaignId}
+        figmaSyncedAt={figmaSyncedAt}
+        brandKit="Brand Kit 2026"
+      />
 
       <div className="flex min-h-0 flex-1">
         <main className="tv-scroll min-w-0 flex-1 overflow-y-auto">

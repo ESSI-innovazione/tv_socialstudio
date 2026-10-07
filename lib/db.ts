@@ -244,21 +244,26 @@ export async function getRun(id: string): Promise<Run | null> {
   return { ...run, assets: assets ?? [] };
 }
 
-/** L'esecuzione piu' recente, quella che la console ripristina al refresh. */
-export async function getLatestRun(): Promise<Run | null> {
+/**
+ * L'esecuzione piu' recente di una persona, quella che la console le
+ * ripristina al refresh. Il lavoro e' per utente: la console di Giulia non
+ * riapre il poster di Marco.
+ */
+export async function getLatestRun(email: string): Promise<Run | null> {
   const supabase = db();
-  if (!supabase) return memory().runs[0] ?? null;
+  if (!supabase) return memory().runs.find((r) => r.created_by === email) ?? null;
 
   const { data, error } = await supabase
     .from("runs")
     .select("*, assets(*)")
+    .eq("created_by", email)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error) {
     console.error("[db] getLatestRun", error.message);
-    return memory().runs[0] ?? null;
+    return memory().runs.find((r) => r.created_by === email) ?? null;
   }
   if (!data) return null;
 
@@ -266,19 +271,21 @@ export async function getLatestRun(): Promise<Run | null> {
   return { ...run, assets: assets ?? [] };
 }
 
-export async function listRuns(limit = 5): Promise<Run[]> {
+/** Le esecuzioni di una persona, dalla piu' recente. */
+export async function listRuns(email: string, limit = 5): Promise<Run[]> {
   const supabase = db();
-  if (!supabase) return memory().runs.slice(0, limit);
+  if (!supabase) return memory().runs.filter((r) => r.created_by === email).slice(0, limit);
 
   const { data, error } = await supabase
     .from("runs")
     .select("*")
+    .eq("created_by", email)
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) {
     console.error("[db] listRuns", error.message);
-    return memory().runs.slice(0, limit);
+    return memory().runs.filter((r) => r.created_by === email).slice(0, limit);
   }
   return (data as Run[]).map((r) => ({ ...r, assets: [] }));
 }
@@ -303,6 +310,41 @@ export async function insertAssets(rows: Asset[]): Promise<void> {
 
   const { error } = await supabase.from("assets").insert(rows);
   if (error) console.error("[db] insertAssets", error.message);
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Sostituisce gli asset di un'esecuzione con quelli definitivi.
+ *
+ * Il driver dell'esecuzione battezza gli asset con un id leggibile
+ * (`run-v0-linkedin`); il database vuole UUID. Qui ogni asset che non ne ha
+ * uno lo riceve, e la console riprende quelli salvati.
+ */
+export async function replaceAssets(runId: string, rows: Asset[]): Promise<Asset[]> {
+  const normalized: Asset[] = rows.map((a) => ({
+    ...a,
+    id: UUID.test(a.id) ? a.id : crypto.randomUUID(),
+    run_id: runId,
+  }));
+
+  const supabase = db();
+  if (!supabase) {
+    const run = memory().runs.find((r) => r.id === runId);
+    if (run) run.assets = normalized;
+    return normalized;
+  }
+
+  const { error: wipe } = await supabase.from("assets").delete().eq("run_id", runId);
+  if (wipe) console.error("[db] replaceAssets delete", wipe.message);
+
+  if (normalized.length === 0) return [];
+  const { data, error } = await supabase.from("assets").insert(normalized).select();
+  if (error) {
+    console.error("[db] replaceAssets insert", error.message);
+    return normalized;
+  }
+  return data as Asset[];
 }
 
 export async function getAsset(id: string): Promise<Asset | null> {

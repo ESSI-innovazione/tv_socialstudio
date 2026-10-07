@@ -1,31 +1,62 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Check, ChevronDown, Frame, Palette } from "lucide-react";
 import type { Campaign } from "@/lib/types";
 import type { StudioUser } from "@/auth";
 import { Wordmark } from "./logo";
+import type { NavItem } from "./nav";
 
 interface Props {
   user: StudioUser;
-  campaigns: Campaign[];
-  campaignId: string | null;
-  onCampaign: (id: string) => void;
-  figmaSyncedAt: string | null;
+  /** Le pagine dello Studio. Senza, la barra mostra solo marchio e persona. */
+  nav?: NavItem[];
+  /** La campagna attiva: solo nella console, dove si sceglie. */
+  campaigns?: Campaign[];
+  campaignId?: string | null;
+  onCampaign?: (id: string) => void;
+  figmaSyncedAt?: string | null;
   brandKit: string;
 }
 
 /**
- * La barra: marchio, campagna, persona. Lo stato di Figma e del Brand Kit
- * non e' qualcosa su cui il team agisce, quindi sta nel menu della persona.
+ * La barra: marchio, navigazione, campagna, persona. Lo stato di Figma e del
+ * Brand Kit non e' qualcosa su cui il team agisce, quindi sta nel menu della
+ * persona.
  */
-export function TopBar({ user, campaigns, campaignId, onCampaign, figmaSyncedAt, brandKit }: Props) {
+export function TopBar({ user, nav = [], campaigns = [], campaignId = null, onCampaign, figmaSyncedAt = null, brandKit }: Props) {
   const active = campaigns.find((c) => c.id === campaignId) ?? campaigns[0] ?? null;
+  const pathname = usePathname();
 
   return (
     <header className="flex h-[60px] shrink-0 items-center justify-between gap-6 px-5" style={{ background: "var(--color-wine)" }}>
       <div className="flex min-w-0 items-center gap-5">
         <Wordmark />
+        {nav.length > 0 ? (
+          <nav className="flex items-center gap-1" aria-label="Pagine dello Studio">
+            {nav.map((item) => {
+              const on = item.href === "/studio" ? pathname === "/studio" : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={on ? "page" : undefined}
+                  className="tv-pill h-[34px] px-3.5 text-[13px] transition-colors"
+                  style={{
+                    background: on ? "rgba(255,255,255,.16)" : "transparent",
+                    color: on ? "#ffffff" : "var(--color-on-wine)",
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
+        {campaigns.length > 0 && onCampaign ? (
+        <>
         <span className="h-6 w-px shrink-0" style={{ background: "rgba(255,255,255,.20)" }} />
         <Dropdown
           label={
@@ -67,6 +98,8 @@ export function TopBar({ user, campaigns, campaignId, onCampaign, figmaSyncedAt,
             </div>
           )}
         </Dropdown>
+        </>
+        ) : null}
       </div>
 
       <Dropdown
